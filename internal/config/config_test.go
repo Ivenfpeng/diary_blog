@@ -1,0 +1,47 @@
+package config
+
+import "testing"
+
+func TestLoadDefaults(t *testing.T) {
+	t.Setenv("BLOG_ADDR", "")
+	t.Setenv("BLOG_DATA_DIR", "")
+	t.Setenv("BLOG_PUBLIC_URL", "")
+	t.Setenv("BLOG_COOKIE_NAME", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.Addr != ":8080" {
+		t.Fatalf("Addr = %q, want %q", cfg.Addr, ":8080")
+	}
+	if cfg.DataDir != "./data" {
+		t.Fatalf("DataDir = %q, want %q", cfg.DataDir, "./data")
+	}
+	if cfg.PublicURL != "http://localhost:8080" {
+		t.Fatalf("PublicURL = %q", cfg.PublicURL)
+	}
+	if cfg.CookieName != "diary_blog_session" {
+		t.Fatalf("CookieName = %q", cfg.CookieName)
+	}
+}
+
+func TestLoadUsesEnvironment(t *testing.T) {
+	t.Setenv("BLOG_ADDR", "127.0.0.1:9090")
+	t.Setenv("BLOG_DATA_DIR", "/srv/diary-blog")
+	t.Setenv("BLOG_PUBLIC_URL", "https://blog.example.com")
+	t.Setenv("BLOG_COOKIE_NAME", "blog_session")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if cfg.Addr != "127.0.0.1:9090" || cfg.DataDir != "/srv/diary-blog" {
+		t.Fatalf("unexpected server config: %+v", cfg)
+	}
+	if cfg.PublicURL != "https://blog.example.com" || cfg.CookieName != "blog_session" {
+		t.Fatalf("unexpected public config: %+v", cfg)
+	}
+}

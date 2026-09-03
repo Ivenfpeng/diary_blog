@@ -1,0 +1,29 @@
+{
+  "name": "diary-blog-admin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@codemirror/lang-markdown": "latest",
+    "@codemirror/state": "latest",
+    "@codemirror/view": "latest",
+    "codemirror": "latest",
+    "@lucide/vue": "1.40.0",
+    "vue": "latest",
+    "vue-router": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "@vitejs/plugin-vue": "latest",
+    "@vue/test-utils": "latest",
+    "jsdom": "29.1.1",
+    "typescript": "6.0.3",
+    "vite": "latest",
+    "vitest": "latest",
+    "vue-tsc": "latest"
+  }
+}
