@@ -19,7 +19,14 @@ export function clearSession(): void {
   username.value = null
 }
 
+export function resetSessionForTests(): void {
+  username.value = null
+  restored.value = false
+  restoreRequest = null
+}
+
 export async function restoreSession(): Promise<boolean> {
+  if (username.value) return true
   if (restoreRequest) return restoreRequest
 
   restoreRequest = apiRequest<SessionResponse>('/api/auth/session')
