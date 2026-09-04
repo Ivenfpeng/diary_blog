@@ -9,6 +9,12 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => { resolve = res })
+  return { promise, resolve }
+}
+
 describe('PostEditorView', () => {
   beforeEach(() => mockedClient.apiRequest.mockReset())
 
@@ -60,7 +66,7 @@ describe('PostEditorView', () => {
       global: {
         stubs: {
           RouterLink: { template: '<a><slot /></a>' },
-          MarkdownEditor: { props: ['modelValue'], template: '<textarea data-testid="markdown-editor" />' },
+          MarkdownEditor: { props: ['modelValue'], emits: ['update:modelValue'], template: '<textarea data-testid="markdown-editor" @input="$emit(\'update:modelValue\', $event.target.value)" />' },
           PublishPanel: PublishPanelStub,
           RevisionPanel: true,
         },
@@ -71,6 +77,12 @@ describe('PostEditorView', () => {
     await wrapper.get('#slug').setValue('Bad Slug')
     expect(wrapper.get('button[name="publish"]').attributes('disabled')).toBeDefined()
     await wrapper.get('#slug').setValue('-bad')
+    expect(wrapper.get('button[name="publish"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('#slug').setValue('valid-slug')
+    await wrapper.get('#title').setValue('x'.repeat(301))
+    expect(wrapper.get('button[name="publish"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('#title').setValue('Ready to publish')
+    await wrapper.get('[data-testid="markdown-editor"]').setValue('x'.repeat(2 * 1024 * 1024 + 1))
     expect(wrapper.get('button[name="publish"]').attributes('disabled')).toBeDefined()
     wrapper.findComponent(PublishPanelStub).vm.$emit('publish')
     await wrapper.vm.$nextTick()
@@ -114,6 +126,45 @@ describe('PostEditorView', () => {
     await wrapper.vm.$nextTick()
 
     expect(mockedClient.apiRequest).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+
+  it.each([
+    ['archive', '/api/admin/posts/7/archive'],
+    ['restore', '/api/admin/posts/7/revisions/11/restore'],
+  ])('blocks typing while a %s request is pending', async (action, actionPath) => {
+    const post = {
+      id: 7, slug: 'valid-slug', title: 'Ready to publish', summary: '', content_md: '# Ready', status: 'published',
+      category_id: null, tag_ids: [], revision: 3,
+    }
+    const pending = deferred<{ post: typeof post }>()
+    mockedClient.apiRequest.mockImplementation((path = '') => {
+      if (path === actionPath) return pending.promise
+      if (path.endsWith('/revisions')) return Promise.resolve({ revisions: [{ id: 11, revision: 2, title: 'Earlier', created_at: '' }] })
+      return Promise.resolve({ post })
+    })
+    const MarkdownEditorStub = { name: 'MarkdownEditor', props: ['modelValue', 'disabled'], emits: ['update:modelValue'], template: '<textarea data-testid="markdown-editor" :disabled="disabled" />' }
+    const PublishPanelStub = { name: 'PublishPanel', emits: ['archive'], template: '<button name="archive" @click="$emit(\'archive\')">Archive</button>' }
+    const RevisionPanelStub = { name: 'RevisionPanel', props: ['revisions'], emits: ['restore'], template: '<button name="restore" @click="$emit(\'restore\', revisions[0])">Restore</button>' }
+    const wrapper = mount(PostEditorView, {
+      global: { stubs: { RouterLink: { template: '<a><slot /></a>' }, MarkdownEditor: MarkdownEditorStub, PublishPanel: PublishPanelStub, RevisionPanel: RevisionPanelStub } },
+    })
+    await vi.waitFor(() => expect(wrapper.find('.editor-form').exists()).toBe(true))
+
+    if (action === 'archive') wrapper.findComponent(PublishPanelStub).vm.$emit('archive')
+    else wrapper.findComponent(RevisionPanelStub).vm.$emit('restore', { id: 11, revision: 2, title: 'Earlier', created_at: '' })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.get('#title').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="markdown-editor"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('#title').setValue('Attempted local edit')
+    wrapper.findComponent(MarkdownEditorStub).vm.$emit('update:modelValue', '# Attempted local Markdown')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('#editor-heading').text()).toBe('Ready to publish')
+    expect(mockedClient.apiRequest).toHaveBeenCalledTimes(3)
+
+    pending.resolve({ post: { ...post, status: action === 'archive' ? 'archived' : 'published', revision: 4 } })
+    await vi.waitFor(() => expect(wrapper.get('#title').attributes('disabled')).toBeUndefined())
     wrapper.unmount()
   })
 })

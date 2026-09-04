@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { EditorState } from '@codemirror/state'
+import { Compartment, EditorState } from '@codemirror/state'
 import { markdown } from '@codemirror/lang-markdown'
 import { EditorView, keymap } from '@codemirror/view'
 import { defaultKeymap } from '@codemirror/commands'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-const props = defineProps<{ modelValue: string }>()
+const props = withDefaults(defineProps<{ modelValue: string; disabled?: boolean }>(), { disabled: false })
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const host = ref<HTMLElement>()
 let view: EditorView | undefined
 let syncingFromParent = false
+const editable = new Compartment()
 
 onMounted(() => {
   if (!host.value) return
@@ -20,6 +21,7 @@ onMounted(() => {
       extensions: [
         markdown(),
         keymap.of(defaultKeymap),
+        editable.of(EditorView.editable.of(!props.disabled)),
         EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
           if (update.docChanged && !syncingFromParent) emit('update:modelValue', update.state.doc.toString())
@@ -37,6 +39,10 @@ watch(() => props.modelValue, (value) => {
   } finally {
     syncingFromParent = false
   }
+})
+
+watch(() => props.disabled, (disabled) => {
+  view?.dispatch({ effects: editable.reconfigure(EditorView.editable.of(!disabled)) })
 })
 
 onBeforeUnmount(() => view?.destroy())

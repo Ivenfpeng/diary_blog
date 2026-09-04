@@ -13,9 +13,12 @@ const router = useRouter()
 const revisions = ref<PostRevision[]>([])
 const loading = ref(true)
 const restoring = ref(false)
+const destructiveActionInFlight = ref(false)
 const errorMessage = ref('')
 const postID = computed(() => Number(route.params.id))
 const publishSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+const maxContentBytes = 2 * 1024 * 1024
+const textEncoder = new TextEncoder()
 
 const editor = createEditorState(async (article) => {
   const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${article.id}`, {
@@ -36,13 +39,17 @@ const editor = createEditorState(async (article) => {
 
 const canPublish = computed(() => Boolean(
   editor.article.title.trim()
+  && !/[\r\n]/.test(editor.article.title)
+  && textEncoder.encode(editor.article.title).length <= 300
   && publishSlugPattern.test(editor.article.slug)
-  && editor.article.content_md.trim(),
+  && editor.article.content_md.trim()
+  && textEncoder.encode(editor.article.content_md).length <= maxContentBytes,
 ) && !editor.saving.value)
-const destructiveActionsLocked = computed(() => editor.dirty.value || editor.saving.value || editor.conflict.value || restoring.value)
+const destructiveActionsLocked = computed(() => editor.dirty.value || editor.saving.value || editor.conflict.value || restoring.value || destructiveActionInFlight.value)
 const saveLabel = computed(() => ({ idle: editor.dirty.value ? 'Unsaved changes' : 'Saved', saving: 'Saving…', saved: 'Saved', error: 'Save failed', conflict: 'Conflict detected' }[editor.saveStatus.value]))
 
 function updateField(field: 'title' | 'slug' | 'summary' | 'content_md', value: string): void {
+  if (destructiveActionInFlight.value) return
   editor.update({ [field]: value })
 }
 
@@ -51,9 +58,21 @@ function numericValue(value: string): number | null {
   return Number.isInteger(number) && number > 0 ? number : null
 }
 
-function updateCategory(value: string): void { editor.update({ category_id: numericValue(value) }) }
+function updateCategory(value: string): void {
+  if (destructiveActionInFlight.value) return
+  editor.update({ category_id: numericValue(value) })
+}
 function updateTags(value: string): void {
+  if (destructiveActionInFlight.value) return
   editor.update({ tag_ids: value.split(',').map((entry) => Number(entry.trim())).filter((id) => Number.isInteger(id) && id > 0) })
+}
+
+function articleSnapshot(): string {
+  return JSON.stringify({ ...editor.article, tag_ids: editor.article.tag_ids })
+}
+
+function hasLocalChangesSince(snapshot: string): boolean {
+  return editor.dirty.value || articleSnapshot() !== snapshot
 }
 
 async function load(): Promise<void> {
@@ -90,18 +109,30 @@ async function publish(): Promise<void> {
 }
 async function archive(): Promise<void> {
   if (destructiveActionsLocked.value) return
-  const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${editor.article.id}/archive`, { method: 'POST', body: { expected_revision: editor.revision.value } })
-  editor.load(response.post)
+  const snapshot = articleSnapshot()
+  destructiveActionInFlight.value = true
+  try {
+    const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${editor.article.id}/archive`, { method: 'POST', body: { expected_revision: editor.revision.value } })
+    if (!hasLocalChangesSince(snapshot)) editor.load(response.post)
+  } finally {
+    destructiveActionInFlight.value = false
+  }
 }
 async function restore(revision: PostRevision): Promise<void> {
   if (destructiveActionsLocked.value) return
+  const snapshot = articleSnapshot()
+  destructiveActionInFlight.value = true
   restoring.value = true
   try {
     const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${editor.article.id}/revisions/${revision.id}/restore`, { method: 'POST', body: { expected_revision: editor.revision.value } })
-    editor.load(response.post)
-    await load()
+    if (!hasLocalChangesSince(snapshot)) {
+      editor.load(response.post)
+      const revisionResponse = await apiRequest<{ revisions: PostRevision[] }>(`/api/admin/posts/${editor.article.id}/revisions`)
+      revisions.value = revisionResponse.revisions ?? []
+    }
   } finally {
     restoring.value = false
+    destructiveActionInFlight.value = false
   }
 }
 
@@ -117,13 +148,13 @@ onMounted(load)
     <template v-else>
       <p v-if="editor.conflict.value" class="form-error" role="alert">This article changed elsewhere. Your local Markdown is preserved; reload before saving again.</p>
       <form class="editor-form" @submit.prevent="saveNow">
-        <label>Title <input id="title" :value="editor.article.title" required @input="updateField('title', ($event.target as HTMLInputElement).value)" /></label>
-        <label>Slug <input id="slug" :value="editor.article.slug" required pattern="[a-z0-9-]+" @input="updateField('slug', ($event.target as HTMLInputElement).value)" /></label>
-        <label class="wide">Summary <textarea id="summary" :value="editor.article.summary" rows="3" @input="updateField('summary', ($event.target as HTMLTextAreaElement).value)" /></label>
-        <label>Category ID <input id="category" :value="editor.article.category_id ?? ''" inputmode="numeric" @input="updateCategory(($event.target as HTMLInputElement).value)" /></label>
-        <label>Tag IDs <input id="tags" :value="editor.article.tag_ids.join(', ')" placeholder="1, 4, 8" @input="updateTags(($event.target as HTMLInputElement).value)" /></label>
-        <label class="wide">Markdown <MarkdownEditor :model-value="editor.article.content_md" @update:model-value="updateField('content_md', $event)" /></label>
-        <div class="editor-actions"><button type="submit" class="secondary-button" :disabled="editor.saving.value || !editor.dirty.value"><Save :size="16" aria-hidden="true" /> Save now</button><PublishPanel :can-publish="canPublish" :saving="editor.saving.value" :actions-locked="destructiveActionsLocked" :status="editor.article.status" @preview="preview" @publish="publish" @archive="archive" /></div>
+        <label>Title <input id="title" :value="editor.article.title" required :disabled="destructiveActionInFlight" @input="updateField('title', ($event.target as HTMLInputElement).value)" /></label>
+        <label>Slug <input id="slug" :value="editor.article.slug" required pattern="[a-z0-9-]+" :disabled="destructiveActionInFlight" @input="updateField('slug', ($event.target as HTMLInputElement).value)" /></label>
+        <label class="wide">Summary <textarea id="summary" :value="editor.article.summary" rows="3" :disabled="destructiveActionInFlight" @input="updateField('summary', ($event.target as HTMLTextAreaElement).value)" /></label>
+        <label>Category ID <input id="category" :value="editor.article.category_id ?? ''" inputmode="numeric" :disabled="destructiveActionInFlight" @input="updateCategory(($event.target as HTMLInputElement).value)" /></label>
+        <label>Tag IDs <input id="tags" :value="editor.article.tag_ids.join(', ')" placeholder="1, 4, 8" :disabled="destructiveActionInFlight" @input="updateTags(($event.target as HTMLInputElement).value)" /></label>
+        <label class="wide">Markdown <MarkdownEditor :model-value="editor.article.content_md" :disabled="destructiveActionInFlight" @update:model-value="updateField('content_md', $event)" /></label>
+        <div class="editor-actions"><button type="submit" class="secondary-button" :disabled="editor.saving.value || destructiveActionInFlight || !editor.dirty.value"><Save :size="16" aria-hidden="true" /> Save now</button><PublishPanel :can-publish="canPublish" :saving="editor.saving.value || destructiveActionInFlight" :actions-locked="destructiveActionsLocked" :status="editor.article.status" @preview="preview" @publish="publish" @archive="archive" /></div>
       </form>
       <section v-if="editor.previewHTML.value" class="preview" aria-labelledby="preview-heading"><h2 id="preview-heading">Preview</h2><div v-html="editor.previewHTML.value" /></section>
       <RevisionPanel :revisions="revisions" :restoring="restoring" :actions-locked="destructiveActionsLocked" @restore="restore" />
