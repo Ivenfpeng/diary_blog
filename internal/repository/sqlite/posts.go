@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Ivenfpeng/diary_blog/internal/content"
 	"github.com/Ivenfpeng/diary_blog/internal/posts"
@@ -193,6 +195,258 @@ func (r *PostRepository) RestoreRevision(ctx context.Context, postID, revisionID
 		return content.Post{}, fmt.Errorf("commit restore revision: %w", err)
 	}
 	return restored, nil
+}
+
+func (r *PostRepository) Publish(ctx context.Context, id int64, rendered content.RenderedContent, expectedRevision int64, now time.Time) (content.Post, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return content.Post{}, fmt.Errorf("begin publish: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	current, err := getPost(ctx, tx, id)
+	if err != nil {
+		return content.Post{}, err
+	}
+	if current.Revision != expectedRevision {
+		return content.Post{}, posts.ErrConflict
+	}
+	if err := insertRevision(ctx, tx, current, now); err != nil {
+		return content.Post{}, err
+	}
+	result, err := tx.ExecContext(ctx, `
+		UPDATE posts SET content_html = ?, content_plain = ?, status = ?,
+			published_at = COALESCE(published_at, ?), revision = revision + 1, updated_at = ?
+		WHERE id = ? AND revision = ?`, rendered.HTML, rendered.PlainText,
+		content.StatusPublished, formatTime(now), formatTime(now), id, expectedRevision)
+	if err != nil {
+		return content.Post{}, fmt.Errorf("publish post: %w", err)
+	}
+	if err := requireUpdated(result); err != nil {
+		return content.Post{}, err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM posts_fts WHERE post_id = ?", id); err != nil {
+		return content.Post{}, fmt.Errorf("clear post search index: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO posts_fts (post_id, title, summary, content_plain)
+		VALUES (?, ?, ?, ?)`, id, current.Title, current.Summary, rendered.PlainText); err != nil {
+		return content.Post{}, fmt.Errorf("index published post: %w", err)
+	}
+	if err := trimRevisions(ctx, tx, id); err != nil {
+		return content.Post{}, err
+	}
+	published, err := getPost(ctx, tx, id)
+	if err != nil {
+		return content.Post{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return content.Post{}, fmt.Errorf("commit publish: %w", err)
+	}
+	return published, nil
+}
+
+func (r *PostRepository) Archive(ctx context.Context, id, expectedRevision int64, now time.Time) (content.Post, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return content.Post{}, fmt.Errorf("begin archive: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	current, err := getPost(ctx, tx, id)
+	if err != nil {
+		return content.Post{}, err
+	}
+	if current.Revision != expectedRevision {
+		return content.Post{}, posts.ErrConflict
+	}
+	if err := insertRevision(ctx, tx, current, now); err != nil {
+		return content.Post{}, err
+	}
+	result, err := tx.ExecContext(ctx, `
+		UPDATE posts SET status = ?, revision = revision + 1, updated_at = ?
+		WHERE id = ? AND revision = ?`, content.StatusArchived, formatTime(now), id, expectedRevision)
+	if err != nil {
+		return content.Post{}, fmt.Errorf("archive post: %w", err)
+	}
+	if err := requireUpdated(result); err != nil {
+		return content.Post{}, err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM posts_fts WHERE post_id = ?", id); err != nil {
+		return content.Post{}, fmt.Errorf("remove archived post from search: %w", err)
+	}
+	if err := trimRevisions(ctx, tx, id); err != nil {
+		return content.Post{}, err
+	}
+	archived, err := getPost(ctx, tx, id)
+	if err != nil {
+		return content.Post{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return content.Post{}, fmt.Errorf("commit archive: %w", err)
+	}
+	return archived, nil
+}
+
+func (r *PostRepository) GetPublishedBySlug(ctx context.Context, slug string) (content.Post, error) {
+	var id int64
+	err := r.db.QueryRowContext(ctx, "SELECT id FROM posts WHERE slug = ? AND status = ?", slug, content.StatusPublished).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return content.Post{}, posts.ErrNotFound
+	}
+	if err != nil {
+		return content.Post{}, fmt.Errorf("find published post: %w", err)
+	}
+	return getPost(ctx, r.db, id)
+}
+
+func (r *PostRepository) ListPublished(ctx context.Context, filter posts.PublishedFilter) ([]content.Post, int, error) {
+	where := []string{"p.status = ?"}
+	args := []any{content.StatusPublished}
+	if filter.CategorySlug != "" {
+		where = append(where, "EXISTS (SELECT 1 FROM categories c WHERE c.id = p.category_id AND c.slug = ?)")
+		args = append(args, filter.CategorySlug)
+	}
+	if filter.TagSlug != "" {
+		where = append(where, "EXISTS (SELECT 1 FROM post_tags pt JOIN tags t ON t.id = pt.tag_id WHERE pt.post_id = p.id AND t.slug = ?)")
+		args = append(args, filter.TagSlug)
+	}
+	if filter.Year != 0 {
+		where = append(where, "CAST(strftime('%Y', p.published_at) AS INTEGER) = ?")
+		args = append(args, filter.Year)
+	}
+	return r.listPostIDs(ctx, strings.Join(where, " AND "), args, filter.Page, filter.PageSize, "p.published_at DESC, p.id DESC")
+}
+
+func (r *PostRepository) SearchPublished(ctx context.Context, query string, page, pageSize int) ([]content.Post, int, error) {
+	match, err := searchExpression(query)
+	if err != nil {
+		return nil, 0, err
+	}
+	if page < 1 || pageSize < 1 || pageSize > 100 {
+		return nil, 0, fmt.Errorf("%w: invalid pagination", posts.ErrValidation)
+	}
+	var total int
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM posts_fts f JOIN posts p ON p.id = f.post_id
+		WHERE posts_fts MATCH ? AND p.status = ?`, match, content.StatusPublished).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count search results: %w", err)
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT p.id FROM posts_fts f JOIN posts p ON p.id = f.post_id
+		WHERE posts_fts MATCH ? AND p.status = ?
+		ORDER BY bm25(posts_fts), p.id DESC LIMIT ? OFFSET ?`,
+		match, content.StatusPublished, pageSize, (page-1)*pageSize)
+	if err != nil {
+		return nil, 0, fmt.Errorf("search published posts: %w", err)
+	}
+	ids, err := collectIDs(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	result, err := r.loadPosts(ctx, ids)
+	return result, total, err
+}
+
+func (r *PostRepository) RebuildSearch(ctx context.Context) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin rebuild search: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, "DELETE FROM posts_fts"); err != nil {
+		return fmt.Errorf("clear search index: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO posts_fts (post_id, title, summary, content_plain)
+		SELECT id, title, summary, content_plain FROM posts WHERE status = ?`, content.StatusPublished); err != nil {
+		return fmt.Errorf("rebuild search index: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit rebuild search: %w", err)
+	}
+	return nil
+}
+
+func (r *PostRepository) ListAdmin(ctx context.Context, filter posts.AdminFilter) ([]content.Post, int, error) {
+	where := []string{"1 = 1"}
+	args := make([]any, 0, 3)
+	if filter.Status != "" {
+		where = append(where, "p.status = ?")
+		args = append(args, filter.Status)
+	}
+	if query := strings.TrimSpace(filter.Query); query != "" {
+		where = append(where, "(p.title LIKE ? ESCAPE '\\' OR p.slug LIKE ? ESCAPE '\\')")
+		query = "%" + escapeLike(query) + "%"
+		args = append(args, query, query)
+	}
+	return r.listPostIDs(ctx, strings.Join(where, " AND "), args, filter.Page, filter.PageSize, "p.updated_at DESC, p.id DESC")
+}
+
+func (r *PostRepository) listPostIDs(ctx context.Context, where string, args []any, page, pageSize int, order string) ([]content.Post, int, error) {
+	if page < 1 || pageSize < 1 || pageSize > 100 {
+		return nil, 0, fmt.Errorf("%w: invalid pagination", posts.ErrValidation)
+	}
+	var total int
+	if err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM posts p WHERE "+where, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count posts: %w", err)
+	}
+	queryArgs := append(append([]any{}, args...), pageSize, (page-1)*pageSize)
+	rows, err := r.db.QueryContext(ctx, "SELECT p.id FROM posts p WHERE "+where+" ORDER BY "+order+" LIMIT ? OFFSET ?", queryArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list posts: %w", err)
+	}
+	ids, err := collectIDs(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	result, err := r.loadPosts(ctx, ids)
+	return result, total, err
+}
+
+func collectIDs(rows *sql.Rows) ([]int64, error) {
+	defer rows.Close()
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan post id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate post ids: %w", err)
+	}
+	return ids, nil
+}
+
+func (r *PostRepository) loadPosts(ctx context.Context, ids []int64) ([]content.Post, error) {
+	result := make([]content.Post, 0, len(ids))
+	for _, id := range ids {
+		post, err := getPost(ctx, r.db, id)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, post)
+	}
+	return result, nil
+}
+
+func searchExpression(query string) (string, error) {
+	if utf8.RuneCountInString(query) > 100 {
+		return "", fmt.Errorf("%w: search query exceeds 100 characters", posts.ErrValidation)
+	}
+	tokens := strings.Fields(query)
+	if len(tokens) == 0 {
+		return "", fmt.Errorf("%w: search query is empty", posts.ErrValidation)
+	}
+	for i, token := range tokens {
+		tokens[i] = `"` + strings.ReplaceAll(token, `"`, `""`) + `"`
+	}
+	return strings.Join(tokens, " "), nil
+}
+
+func escapeLike(value string) string {
+	replacer := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return replacer.Replace(value)
 }
 
 type queryer interface {

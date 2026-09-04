@@ -767,7 +767,7 @@ git commit -m "feat: persist drafts and article revisions"
 - Modify: `internal/repository/sqlite/posts.go`
 - Modify: `internal/repository/sqlite/posts_test.go`
 
-- [ ] **Step 1: Extend the repository contract**
+- [x] **Step 1: Extend the repository contract**
 
 Add methods:
 
@@ -800,7 +800,7 @@ type AdminFilter struct {
 }
 ```
 
-- [ ] **Step 2: Write failing service and integration tests**
+- [x] **Step 2: Write failing service and integration tests**
 
 Tests must prove:
 
@@ -811,7 +811,7 @@ Tests must prove:
 - Chinese query `数据库`, identifier query `chi.Router`, and mixed query return expected articles.
 - Search query length is limited to 100 runes.
 
-- [ ] **Step 3: Implement the service**
+- [x] **Step 3: Implement the service**
 
 Create a service with this dependency boundary:
 
@@ -835,11 +835,11 @@ func (s *Service) Archive(ctx context.Context, id int64, expectedRevision int64)
 
 All service methods validate pagination, identifiers, title, slug, content size, and optimistic revision values before calling the repository. `Publish` must load the draft, validate required fields, render outside the transaction, and call repository `Publish` for the atomic post/FTS update.
 
-- [ ] **Step 4: Implement FTS transactions**
+- [x] **Step 4: Implement FTS transactions**
 
 Use parameterized `MATCH` queries. Normalize whitespace, reject empty queries, quote user tokens instead of concatenating operators, and rank with `bm25(posts_fts)`. Publishing and archiving must update `posts` and `posts_fts` in the same transaction.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 
