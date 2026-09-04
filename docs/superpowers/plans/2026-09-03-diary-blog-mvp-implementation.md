@@ -1067,25 +1067,25 @@ git commit -m "feat: expose article administration API"
 - Modify: `admin/src/main.ts`
 - Modify: `admin/src/App.vue`
 
-- [ ] **Step 1: Write the failing login component test**
+- [x] **Step 1: Write the failing login component test**
 
 Mount `LoginView`, submit username/password, mock `POST /api/auth/login`, and assert navigation to `/admin`. Add a failed-login test that keeps the username, clears the password, focuses the password input, and renders the server message.
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 Run: `npm --prefix admin test -- LoginView`
 
 Expected: FAIL because the view and session state do not exist.
 
-- [ ] **Step 3: Implement typed API and router guards**
+- [x] **Step 3: Implement typed API and router guards**
 
 `api/client.ts` must send JSON, include credentials, attach `X-CSRF-Token` for writes, parse the stable error shape, and throw `ApiError`. Router guards call `GET /api/auth/session` once and redirect unauthenticated users to `/admin/login`.
 
-- [ ] **Step 4: Build the workbench shell**
+- [x] **Step 4: Build the workbench shell**
 
 Create a quiet operational layout with fixed navigation width, compact top bar, stable 36px icon buttons using Lucide icons, clear focus rings, status colors, and mobile drawer behavior. Do not use nested cards or decorative dashboard panels.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 
