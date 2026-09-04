@@ -155,6 +155,54 @@ func TestSessionTimestampMigrationPreservesRFC3339NanoFractions(t *testing.T) {
 	}
 }
 
+func TestSessionTimestampMigrationRejectsOutOfRangeValuesTransactionally(t *testing.T) {
+	ctx := context.Background()
+	db, err := Open(ctx, filepath.Join(t.TempDir(), "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if _, err := db.ExecContext(ctx, createMigrationsTable); err != nil {
+		t.Fatal(err)
+	}
+	for _, migration := range []string{"001_initial.sql", "002_search.sql", "003_publication_snapshot.sql", "004_published_cover_media.sql", "005_single_administrator.sql"} {
+		if err := applyMigration(ctx, db, migration); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := time.Parse(time.RFC3339Nano, "9999-12-31T23:59:59Z"); err != nil {
+		t.Fatalf("test timestamp is not valid RFC3339: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO admins (id, username, password_hash, created_at, updated_at)
+		VALUES (1, 'admin', 'hash', '2026-09-04T12:00:00Z', '2026-09-04T12:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO sessions (token_hash, csrf_hash, admin_id, expires_at, last_seen_at, created_at)
+		VALUES (?, ?, 1, '9999-12-31T23:59:59Z', '2026-09-04T11:00:00Z', '2026-09-04T10:00:00Z')`, make([]byte, 32), make([]byte, 32)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := applyMigration(ctx, db, "006_session_unix_timestamps.sql"); err == nil {
+		t.Fatal("out-of-range RFC3339 session timestamp unexpectedly migrated")
+	}
+	var storageType string
+	if err := db.QueryRowContext(ctx, "SELECT typeof(expires_at) FROM sessions").Scan(&storageType); err != nil {
+		t.Fatalf("original sessions table was not restored by rollback: %v", err)
+	}
+	if storageType != "text" {
+		t.Fatalf("expiry storage type after rollback = %q, want text", storageType)
+	}
+	var applied int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version = '006_session_unix_timestamps.sql'").Scan(&applied); err != nil {
+		t.Fatal(err)
+	}
+	if applied != 0 {
+		t.Fatalf("failed session timestamp migration recorded %d versions, want 0", applied)
+	}
+}
+
 func TestMigratedDatabaseEnforcesForeignKeys(t *testing.T) {
 	ctx := context.Background()
 	db, err := Open(ctx, filepath.Join(t.TempDir(), "data"))

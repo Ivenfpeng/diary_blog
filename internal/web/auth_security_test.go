@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -67,6 +68,50 @@ func TestLoginGlobalWorkSaturationFailsIdenticallyBeforeAccountLookup(t *testing
 	handler.throttle.mu.Unlock()
 	if remaining != 0 {
 		t.Fatalf("neutral saturation retained %d empty throttle entries", remaining)
+	}
+}
+
+func TestLoginGlobalWorkSaturationCannotEvictThrottleHistory(t *testing.T) {
+	repository := &saturatedAuthRepository{}
+	origin, err := url.Parse("https://diary.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := newAuthHandler(repository, origin, time.Now, AuthOptions{MaxConcurrentAuthWork: 1, MaxThrottleEntries: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
+	seedThrottleFailures(t, handler.throttle, now,
+		[2]string{"a", "203.0.113.1"},
+		[2]string{"b", "203.0.113.1"},
+		[2]string{"c", "203.0.113.2"},
+		[2]string{"d", "203.0.113.2"},
+	)
+	before := throttleFailureCounts(handler.throttle)
+	handler.authWork <- struct{}{}
+
+	for attempt := 0; attempt < 20; attempt++ {
+		body := fmt.Sprintf(`{"username":"rotated-%d","password":"wrong"}`, attempt)
+		request := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(body))
+		request.RemoteAddr = fmt.Sprintf("198.51.100.%d:4567", attempt+20)
+		response := httptest.NewRecorder()
+		handler.login(response, request)
+		if response.Code != http.StatusServiceUnavailable {
+			t.Fatalf("saturated attempt %d status = %d, want 503", attempt+1, response.Code)
+		}
+	}
+	if calls := repository.lookups.Load(); calls != 0 {
+		t.Fatalf("repository lookups under saturation = %d, want 0", calls)
+	}
+	after := throttleFailureCounts(handler.throttle)
+	if len(after) != len(before) {
+		t.Fatalf("saturated traffic changed throttle entry count from %d to %d", len(before), len(after))
+	}
+	for key, want := range before {
+		if got, ok := after[key]; !ok || got != want {
+			t.Fatalf("saturated traffic changed throttle history %q from %d to %d (present=%v)", key, want, got, ok)
+		}
 	}
 }
 
@@ -186,4 +231,55 @@ func TestLoginThrottleStateIsGloballyCappedWithCrossKeyEviction(t *testing.T) {
 	if retainedOldest {
 		t.Fatal("least-recently-used throttle key was not evicted")
 	}
+}
+
+func TestLoginThrottleProtectsRequestedKeysWhileMakingRoom(t *testing.T) {
+	const capacity = 4
+	throttle := newLoginThrottle(capacity)
+	now := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
+	seedThrottleFailures(t, throttle, now,
+		[2]string{"a", "203.0.113.1"},
+		[2]string{"b", "203.0.113.1"},
+		[2]string{"c", "203.0.113.2"},
+		[2]string{"d", "203.0.113.2"},
+	)
+	ipKey := ipThrottleKey("203.0.113.1")
+	before := throttleFailureCounts(throttle)
+	wantIPFailures := before[ipKey]
+	if wantIPFailures == 0 {
+		t.Fatal("review reproduction did not retain the requested IP history")
+	}
+
+	if !throttle.begin("a", "203.0.113.1", now.Add(5*time.Second)) {
+		t.Fatal("request was rejected despite an evictable unrequested entry")
+	}
+	after := throttleFailureCounts(throttle)
+	if len(after) > capacity {
+		t.Errorf("throttle entry count = %d after requested-key eviction, exceeds cap %d", len(after), capacity)
+	}
+	if got := after[ipKey]; got != wantIPFailures {
+		t.Errorf("requested IP failure count = %d, want preserved count %d", got, wantIPFailures)
+	}
+	throttle.complete("a", "203.0.113.1", now.Add(5*time.Second), throttleNeutral)
+}
+
+func seedThrottleFailures(t *testing.T, throttle *loginThrottle, now time.Time, attempts ...[2]string) {
+	t.Helper()
+	for index, attempt := range attempts {
+		at := now.Add(time.Duration(index) * time.Second)
+		if !throttle.begin(attempt[0], attempt[1], at) {
+			t.Fatalf("seed throttle attempt %d (%s, %s) was rejected", index+1, attempt[0], attempt[1])
+		}
+		throttle.complete(attempt[0], attempt[1], at, throttleFailure)
+	}
+}
+
+func throttleFailureCounts(throttle *loginThrottle) map[string]int {
+	throttle.mu.Lock()
+	defer throttle.mu.Unlock()
+	counts := make(map[string]int, len(throttle.entries))
+	for key, entry := range throttle.entries {
+		counts[key] = len(entry.failures)
+	}
+	return counts
 }

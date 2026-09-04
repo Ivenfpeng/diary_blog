@@ -123,18 +123,18 @@ func (h *authHandler) login(w http.ResponseWriter, r *http.Request) {
 	}
 	ip := clientIP(r.RemoteAddr, r.Header.Get("X-Forwarded-For"), h.trustedProxies)
 	now := h.clock()
-	if !h.throttle.begin(username, ip, now) {
-		writeAPIError(w, r, http.StatusTooManyRequests, "login_throttled", "Too many failed login attempts. Try again later.")
-		return
-	}
-	outcome := throttleNeutral
-	defer func() { h.throttle.complete(username, ip, h.clock(), outcome) }()
 	if !h.acquireAuthWork() {
 		w.Header().Set("Retry-After", "1")
 		writeAPIError(w, r, http.StatusServiceUnavailable, "authentication_busy", "Authentication is temporarily busy. Try again shortly.")
 		return
 	}
 	defer h.releaseAuthWork()
+	if !h.throttle.begin(username, ip, now) {
+		writeAPIError(w, r, http.StatusTooManyRequests, "login_throttled", "Too many failed login attempts. Try again later.")
+		return
+	}
+	outcome := throttleNeutral
+	defer func() { h.throttle.complete(username, ip, h.clock(), outcome) }()
 
 	admin, err := h.repository.FindAdminByUsername(r.Context(), username)
 	if errors.Is(err, auth.ErrAdminNotFound) {
@@ -314,13 +314,11 @@ func (l *loginThrottle) begin(username, ip string, now time.Time) bool {
 			return false
 		}
 	}
-	missing := 0
+	keys := make([]string, 0, len(specs))
 	for _, spec := range specs {
-		if l.entries[spec.key] == nil {
-			missing++
-		}
+		keys = append(keys, spec.key)
 	}
-	if !l.makeRoom(missing) {
+	if !l.makeRoom(keys) {
 		return false
 	}
 	for _, spec := range specs {
@@ -398,11 +396,25 @@ func (l *loginThrottle) evictExpired(now time.Time) {
 	}
 }
 
-func (l *loginThrottle) makeRoom(required int) bool {
-	for len(l.entries)+required > l.maxEntries {
+func (l *loginThrottle) makeRoom(requestedKeys []string) bool {
+	protected := make(map[string]struct{}, len(requestedKeys))
+	for _, key := range requestedKeys {
+		protected[key] = struct{}{}
+	}
+	for {
+		missing := 0
+		for key := range protected {
+			if l.entries[key] == nil {
+				missing++
+			}
+		}
+		if len(l.entries)+missing <= l.maxEntries {
+			return true
+		}
 		var candidate *list.Element
 		for element := l.recency.Back(); element != nil; element = element.Prev() {
-			if l.entries[element.Value.(string)].inFlight == 0 {
+			key := element.Value.(string)
+			if _, requested := protected[key]; !requested && l.entries[key].inFlight == 0 {
 				candidate = element
 				break
 			}
@@ -413,7 +425,6 @@ func (l *loginThrottle) makeRoom(required int) bool {
 		key := candidate.Value.(string)
 		l.remove(key, l.entries[key])
 	}
-	return true
 }
 
 func (l *loginThrottle) remove(key string, entry *loginThrottleEntry) {

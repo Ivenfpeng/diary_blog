@@ -5,9 +5,9 @@ CREATE TABLE sessions (
   token_hash BLOB PRIMARY KEY,
   csrf_hash BLOB NOT NULL,
   admin_id INTEGER NOT NULL,
-  expires_at INTEGER NOT NULL,
-  last_seen_at INTEGER NOT NULL,
-  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL CHECK(typeof(expires_at) = 'integer'),
+  last_seen_at INTEGER NOT NULL CHECK(typeof(last_seen_at) = 'integer'),
+  created_at INTEGER NOT NULL CHECK(typeof(created_at) = 'integer'),
   FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
 );
 
