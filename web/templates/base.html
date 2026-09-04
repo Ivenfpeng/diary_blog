@@ -1,0 +1,35 @@
+{{define "base"}}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="{{.Description}}">
+    <title>{{.Title}} · Diary Blog</title>
+    {{if .CanonicalURL}}<link rel="canonical" href="{{.CanonicalURL}}">{{end}}
+    <link rel="stylesheet" href="/static/site.css">
+    <script src="/static/site.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <header class="site-header">
+      <a class="wordmark" href="/">DIARY / KB</a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="taxonomy" data-menu-toggle>Browse topics</button>
+      <nav class="header-nav" aria-label="Primary navigation"><a href="/">Articles</a><a href="/archive">Archive</a></nav>
+    </header>
+    <div class="site-layout">
+      <aside class="taxonomy" id="taxonomy" data-taxonomy aria-label="Taxonomy">
+        <p class="eyebrow">Knowledge base</p>
+        <nav>
+          <a href="/">All writing</a>
+          <a href="/archive">By year</a>
+        </nav>
+        {{if .CurrentCategory}}<p class="taxonomy-current">Category: {{.CurrentCategory}}</p>{{end}}
+        {{if .CurrentTag}}<p class="taxonomy-current">Tag: {{.CurrentTag}}</p>{{end}}
+      </aside>
+      <main id="main-content">{{template "page" .}}</main>
+    </div>
+    <footer class="site-footer">Built for durable notes and careful reading.</footer>
+  </body>
+</html>
+{{end}}

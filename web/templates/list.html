@@ -1,0 +1,23 @@
+{{define "page"}}
+<section class="listing-header">
+  <p class="eyebrow">Browse</p>
+  <h1>{{.Heading}}</h1>
+  <p>{{.Description}}</p>
+</section>
+{{template "post_rows" .}}
+{{end}}
+
+{{define "post_rows"}}
+<section class="post-list" aria-label="Articles">
+  {{range .Posts}}
+  <article class="post-row">
+    <div class="post-row-date">{{formatDate .PublishedAt}}</div>
+    <div>
+      <h2><a href="/posts/{{.Slug}}">{{.Title}}</a></h2>
+      {{if .Summary}}<p>{{.Summary}}</p>{{end}}
+    </div>
+    <a class="row-arrow" href="/posts/{{.Slug}}" aria-label="Read {{.Title}}">↗</a>
+  </article>
+  {{else}}<p class="empty-state">No published articles yet.</p>{{end}}
+</section>
+{{end}}
