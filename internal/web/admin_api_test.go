@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -131,6 +132,33 @@ func TestAdminPostAPIRejectsUnauthenticatedAndMalformedRequests(t *testing.T) {
 	request.AddCookie(csrf)
 	response = do(t, server, request)
 	assertAPIError(t, response, http.StatusBadRequest, "invalid_request", "The request body is invalid.")
+
+	request, err = http.NewRequest(http.MethodPost, server.URL+"/api/admin/posts", bytes.NewBufferString(`{"title":`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Origin", authOrigin)
+	request.Header.Set(web.CSRFHeaderName, csrf.Value)
+	request.AddCookie(session)
+	request.AddCookie(csrf)
+	response = do(t, server, request)
+	assertAPIError(t, response, http.StatusBadRequest, "invalid_request", "The request body is invalid.")
+
+	request, err = http.NewRequest(http.MethodPost, server.URL+"/api/admin/posts", strings.NewReader(`{"content_md":"`+strings.Repeat("x", 2*1024*1024)+`"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Origin", authOrigin)
+	request.Header.Set(web.CSRFHeaderName, csrf.Value)
+	request.AddCookie(session)
+	request.AddCookie(csrf)
+	response = do(t, server, request)
+	assertAPIError(t, response, http.StatusBadRequest, "invalid_request", "The request body is invalid.")
+
+	response = adminRequest(t, server, session, nil, http.MethodPost, "/api/admin/posts", map[string]any{"tag_ids": []int64{}})
+	assertAPIError(t, response, http.StatusForbidden, "csrf_rejected", "The request origin or CSRF token is invalid.")
 }
 
 func TestAdminPostAPIMapsValidationNotFoundAndConflictErrors(t *testing.T) {
@@ -147,6 +175,24 @@ func TestAdminPostAPIMapsValidationNotFoundAndConflictErrors(t *testing.T) {
 		"slug": "conflict", "title": "Stale", "content_md": "text", "tag_ids": []int64{}, "expected_revision": 99,
 	})
 	assertAPIError(t, response, http.StatusConflict, "post_conflict", "The article changed on the server.")
+}
+
+func TestAdminPostAPIRejectsMissingParentResources(t *testing.T) {
+	server, _, session, csrf := newAdminServer(t)
+	for _, test := range []struct {
+		name   string
+		method string
+		path   string
+		body   any
+	}{
+		{name: "preview", method: http.MethodPost, path: "/api/admin/posts/999/preview", body: map[string]any{"content_md": "# Preview"}},
+		{name: "revisions", method: http.MethodGet, path: "/api/admin/posts/999/revisions"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response := adminRequest(t, server, session, csrf, test.method, test.path, test.body)
+			assertAPIError(t, response, http.StatusNotFound, "post_not_found", "The article was not found.")
+		})
+	}
 }
 
 func newAdminServer(t *testing.T) (*httptest.Server, *sql.DB, *http.Cookie, *http.Cookie) {

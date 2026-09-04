@@ -156,7 +156,7 @@ func (a *adminPostAPI) save(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *adminPostAPI) preview(w http.ResponseWriter, r *http.Request) {
-	if _, ok := postID(w, r); !ok {
+	if _, ok := a.parentPostID(w, r); !ok {
 		return
 	}
 	var input previewRequest
@@ -200,7 +200,7 @@ func (a *adminPostAPI) changeRevision(w http.ResponseWriter, r *http.Request, ac
 }
 
 func (a *adminPostAPI) listRevisions(w http.ResponseWriter, r *http.Request) {
-	id, ok := postID(w, r)
+	id, ok := a.parentPostID(w, r)
 	if !ok {
 		return
 	}
@@ -280,6 +280,18 @@ func postID(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
 		writeAPIError(w, r, http.StatusBadRequest, "post_validation", "The article data is invalid.")
+		return 0, false
+	}
+	return id, true
+}
+
+func (a *adminPostAPI) parentPostID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	id, ok := postID(w, r)
+	if !ok {
+		return 0, false
+	}
+	if _, err := a.posts.Get(r.Context(), id); err != nil {
+		a.writePostError(w, r, err)
 		return 0, false
 	}
 	return id, true
