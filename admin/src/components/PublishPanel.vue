@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Archive, Eye, Send } from '@lucide/vue'
 
-defineProps<{ canPublish: boolean; saving: boolean; status: string }>()
+defineProps<{ canPublish: boolean; saving: boolean; actionsLocked: boolean; status: string }>()
 const emit = defineEmits<{ preview: []; publish: []; archive: [] }>()
 </script>
 
@@ -14,7 +14,7 @@ const emit = defineEmits<{ preview: []; publish: []; archive: [] }>()
     <button name="publish" type="button" class="primary-button" :disabled="!canPublish || saving" @click="emit('publish')">
       <Send :size="16" aria-hidden="true" /> Publish
     </button>
-    <button type="button" class="danger-button" :disabled="saving" @click="emit('archive')">
+    <button type="button" class="danger-button" :disabled="saving || actionsLocked" @click="emit('archive')">
       <Archive :size="16" aria-hidden="true" /> Archive
     </button>
   </section>

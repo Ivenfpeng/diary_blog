@@ -6,7 +6,7 @@ export interface PostRevision {
   created_at: string
 }
 
-defineProps<{ revisions: PostRevision[]; restoring: boolean }>()
+defineProps<{ revisions: PostRevision[]; restoring: boolean; actionsLocked: boolean }>()
 const emit = defineEmits<{ restore: [revision: PostRevision] }>()
 </script>
 
@@ -17,7 +17,7 @@ const emit = defineEmits<{ restore: [revision: PostRevision] }>()
     <ol v-else>
       <li v-for="revision in revisions" :key="revision.id">
         <span><strong>v{{ revision.revision }}</strong> {{ revision.title || 'Untitled article' }}</span>
-        <button type="button" :disabled="restoring" @click="emit('restore', revision)">Restore</button>
+        <button type="button" :disabled="restoring || actionsLocked" @click="emit('restore', revision)">Restore</button>
       </li>
     </ol>
   </section>

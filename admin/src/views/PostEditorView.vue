@@ -15,6 +15,7 @@ const loading = ref(true)
 const restoring = ref(false)
 const errorMessage = ref('')
 const postID = computed(() => Number(route.params.id))
+const publishSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 const editor = createEditorState(async (article) => {
   const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${article.id}`, {
@@ -33,7 +34,12 @@ const editor = createEditorState(async (article) => {
   return response.post
 })
 
-const canPublish = computed(() => Boolean(editor.article.title.trim() && editor.article.slug.trim() && editor.article.content_md.trim()) && !editor.saving.value)
+const canPublish = computed(() => Boolean(
+  editor.article.title.trim()
+  && publishSlugPattern.test(editor.article.slug)
+  && editor.article.content_md.trim(),
+) && !editor.saving.value)
+const destructiveActionsLocked = computed(() => editor.dirty.value || editor.saving.value || editor.conflict.value || restoring.value)
 const saveLabel = computed(() => ({ idle: editor.dirty.value ? 'Unsaved changes' : 'Saved', saving: 'Saving…', saved: 'Saved', error: 'Save failed', conflict: 'Conflict detected' }[editor.saveStatus.value]))
 
 function updateField(field: 'title' | 'slug' | 'summary' | 'content_md', value: string): void {
@@ -83,10 +89,12 @@ async function publish(): Promise<void> {
   editor.load(response.post)
 }
 async function archive(): Promise<void> {
+  if (destructiveActionsLocked.value) return
   const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${editor.article.id}/archive`, { method: 'POST', body: { expected_revision: editor.revision.value } })
   editor.load(response.post)
 }
 async function restore(revision: PostRevision): Promise<void> {
+  if (destructiveActionsLocked.value) return
   restoring.value = true
   try {
     const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${editor.article.id}/revisions/${revision.id}/restore`, { method: 'POST', body: { expected_revision: editor.revision.value } })
@@ -115,10 +123,10 @@ onMounted(load)
         <label>Category ID <input id="category" :value="editor.article.category_id ?? ''" inputmode="numeric" @input="updateCategory(($event.target as HTMLInputElement).value)" /></label>
         <label>Tag IDs <input id="tags" :value="editor.article.tag_ids.join(', ')" placeholder="1, 4, 8" @input="updateTags(($event.target as HTMLInputElement).value)" /></label>
         <label class="wide">Markdown <MarkdownEditor :model-value="editor.article.content_md" @update:model-value="updateField('content_md', $event)" /></label>
-        <div class="editor-actions"><button type="submit" class="secondary-button" :disabled="editor.saving.value || !editor.dirty.value"><Save :size="16" aria-hidden="true" /> Save now</button><PublishPanel :can-publish="canPublish" :saving="editor.saving.value" :status="editor.article.status" @preview="preview" @publish="publish" @archive="archive" /></div>
+        <div class="editor-actions"><button type="submit" class="secondary-button" :disabled="editor.saving.value || !editor.dirty.value"><Save :size="16" aria-hidden="true" /> Save now</button><PublishPanel :can-publish="canPublish" :saving="editor.saving.value" :actions-locked="destructiveActionsLocked" :status="editor.article.status" @preview="preview" @publish="publish" @archive="archive" /></div>
       </form>
       <section v-if="editor.previewHTML.value" class="preview" aria-labelledby="preview-heading"><h2 id="preview-heading">Preview</h2><div v-html="editor.previewHTML.value" /></section>
-      <RevisionPanel :revisions="revisions" :restoring="restoring" @restore="restore" />
+      <RevisionPanel :revisions="revisions" :restoring="restoring" :actions-locked="destructiveActionsLocked" @restore="restore" />
     </template>
   </section>
 </template>
