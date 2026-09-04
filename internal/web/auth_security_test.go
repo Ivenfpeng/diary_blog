@@ -71,6 +71,51 @@ func TestLoginGlobalWorkSaturationFailsIdenticallyBeforeAccountLookup(t *testing
 	}
 }
 
+func TestLoginAlreadyThrottledRejectsBeforeSaturatedAuthWork(t *testing.T) {
+	repository := &saturatedAuthRepository{}
+	origin, err := url.Parse("https://diary.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
+	handler, err := newAuthHandler(repository, origin, func() time.Time { return now }, AuthOptions{MaxConcurrentAuthWork: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for attempt := 0; attempt < loginFailureLimit; attempt++ {
+		if !handler.throttle.begin("admin", "203.0.113.20", now) {
+			t.Fatalf("seed attempt %d was rejected", attempt+1)
+		}
+		handler.throttle.complete("admin", "203.0.113.20", now, throttleFailure)
+	}
+	before := throttleFailureCounts(handler.throttle)
+	handler.authWork <- struct{}{}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"username":"admin","password":"wrong"}`))
+	request.RemoteAddr = "203.0.113.20:4567"
+	response := httptest.NewRecorder()
+	handler.login(response, request)
+
+	if response.Code != http.StatusTooManyRequests {
+		t.Fatalf("already-throttled request status = %d, want 429: %s", response.Code, response.Body.String())
+	}
+	if calls := repository.lookups.Load(); calls != 0 {
+		t.Fatalf("repository lookups for already-throttled request = %d, want 0", calls)
+	}
+	if occupied := len(handler.authWork); occupied != 1 {
+		t.Fatalf("already-throttled request changed auth-work occupancy to %d, want 1", occupied)
+	}
+	after := throttleFailureCounts(handler.throttle)
+	if len(after) != len(before) {
+		t.Fatalf("already-throttled request changed throttle entry count from %d to %d", len(before), len(after))
+	}
+	for key, want := range before {
+		if got, ok := after[key]; !ok || got != want {
+			t.Fatalf("already-throttled request changed throttle history %q from %d to %d (present=%v)", key, want, got, ok)
+		}
+	}
+}
+
 func TestLoginGlobalWorkSaturationCannotEvictThrottleHistory(t *testing.T) {
 	repository := &saturatedAuthRepository{}
 	origin, err := url.Parse("https://diary.example")

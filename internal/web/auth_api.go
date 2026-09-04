@@ -123,13 +123,17 @@ func (h *authHandler) login(w http.ResponseWriter, r *http.Request) {
 	}
 	ip := clientIP(r.RemoteAddr, r.Header.Get("X-Forwarded-For"), h.trustedProxies)
 	now := h.clock()
+	if !h.throttle.canBegin(username, ip, now) {
+		writeAPIError(w, r, http.StatusTooManyRequests, "login_throttled", "Too many failed login attempts. Try again later.")
+		return
+	}
 	if !h.acquireAuthWork() {
 		w.Header().Set("Retry-After", "1")
 		writeAPIError(w, r, http.StatusServiceUnavailable, "authentication_busy", "Authentication is temporarily busy. Try again shortly.")
 		return
 	}
 	defer h.releaseAuthWork()
-	if !h.throttle.begin(username, ip, now) {
+	if !h.throttle.begin(username, ip, h.clock()) {
 		writeAPIError(w, r, http.StatusTooManyRequests, "login_throttled", "Too many failed login attempts. Try again later.")
 		return
 	}
@@ -297,17 +301,25 @@ func ipThrottleKey(ip string) string {
 	return "ip\x00" + ip
 }
 
+// canBegin checks admission without changing failure history or LRU recency.
+// begin repeats the check while reserving in-flight work after auth-work admission.
+func (l *loginThrottle) canBegin(username, ip string, now time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, spec := range l.specs(username, ip) {
+		entry := l.entries[spec.key]
+		if entry != nil && l.failureCountSince(entry, now)+entry.inFlight >= spec.limit {
+			return false
+		}
+	}
+	return true
+}
+
 func (l *loginThrottle) begin(username, ip string, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.evictExpired(now)
-	specs := []struct {
-		key   string
-		limit int
-	}{
-		{key: usernameIPThrottleKey(username, ip), limit: loginFailureLimit},
-		{key: ipThrottleKey(ip), limit: loginIPFailureLimit},
-	}
+	specs := l.specs(username, ip)
 	for _, spec := range specs {
 		entry := l.currentEntry(spec.key, now)
 		if entry != nil && len(entry.failures)+entry.inFlight >= spec.limit {
@@ -333,6 +345,19 @@ func (l *loginThrottle) begin(username, ip string, now time.Time) bool {
 		l.recency.MoveToFront(entry.element)
 	}
 	return true
+}
+
+func (l *loginThrottle) specs(username, ip string) []struct {
+	key   string
+	limit int
+} {
+	return []struct {
+		key   string
+		limit int
+	}{
+		{key: usernameIPThrottleKey(username, ip), limit: loginFailureLimit},
+		{key: ipThrottleKey(ip), limit: loginIPFailureLimit},
+	}
 }
 
 func (l *loginThrottle) complete(username, ip string, now time.Time, outcome throttleOutcome) {
@@ -378,6 +403,17 @@ func (l *loginThrottle) currentEntry(key string, now time.Time) *loginThrottleEn
 		return nil
 	}
 	return entry
+}
+
+func (l *loginThrottle) failureCountSince(entry *loginThrottleEntry, now time.Time) int {
+	cutoff := now.Add(-loginWindow)
+	failures := 0
+	for _, failure := range entry.failures {
+		if !failure.Before(cutoff) {
+			failures++
+		}
+	}
+	return failures
 }
 
 func (l *loginThrottle) evictExpired(now time.Time) {
