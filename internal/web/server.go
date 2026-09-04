@@ -24,8 +24,10 @@ const requestIDKey contextKey = "request_id"
 // ServerOptions configures filesystem resources that are intentionally kept
 // outside the executable image.
 type ServerOptions struct {
-	MediaDir string
-	Logger   *slog.Logger
+	MediaDir  string
+	Logger    *slog.Logger
+	PublicURL string
+	Clock     func() time.Time
 }
 
 // NewServer builds the public HTTP surface. Options are optional so the
@@ -38,8 +40,14 @@ func NewServer(repository posts.Repository, options ...ServerOptions) http.Handl
 	if config.Logger == nil {
 		config.Logger = slog.Default()
 	}
+	if config.PublicURL == "" {
+		config.PublicURL = "http://localhost:8080"
+	}
+	if config.Clock == nil {
+		config.Clock = time.Now
+	}
 
-	public, err := newPublicHandler(repository)
+	public, err := newPublicHandler(repository, config.PublicURL, config.Clock)
 	if err != nil {
 		panic(fmt.Sprintf("load public templates: %v", err))
 	}

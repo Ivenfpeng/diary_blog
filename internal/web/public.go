@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"net/http"
@@ -19,9 +20,11 @@ import (
 const publicPageSize = 20
 
 type publicHandler struct {
-	repository posts.Repository
-	templates  *template.Template
-	renderer   *content.Renderer
+	repository    posts.Repository
+	templates     *template.Template
+	renderer      *content.Renderer
+	publicBaseURL *url.URL
+	clock         func() time.Time
 }
 
 type pageData struct {
@@ -49,7 +52,11 @@ type pageData struct {
 	Status               int
 }
 
-func newPublicHandler(repository posts.Repository) (*publicHandler, error) {
+func newPublicHandler(repository posts.Repository, publicURL string, clock func() time.Time) (*publicHandler, error) {
+	publicBaseURL, err := normalizePublicURL(publicURL)
+	if err != nil {
+		return nil, err
+	}
 	base, err := template.New("base.html").Funcs(template.FuncMap{
 		"formatDate": func(value time.Time) string {
 			return value.Format("02 Jan 2006")
@@ -61,7 +68,7 @@ func newPublicHandler(repository posts.Repository) (*publicHandler, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &publicHandler{repository: repository, templates: base, renderer: content.NewRenderer()}, nil
+	return &publicHandler{repository: repository, templates: base, renderer: content.NewRenderer(), publicBaseURL: publicBaseURL, clock: clock}, nil
 }
 
 func (h *publicHandler) routes(router chi.Router) {
@@ -102,7 +109,7 @@ func (h *publicHandler) search(w http.ResponseWriter, r *http.Request) {
 	}
 	data := pageData{
 		Title: "Search", Heading: "Search", Description: "Search published technical notes.",
-		CanonicalURL: canonicalURL(r), Robots: "noindex,follow", SearchQuery: query,
+		CanonicalURL: h.publicURLFor(r.URL.Path), Robots: "noindex,follow", SearchQuery: query,
 		Categories: taxonomy.Categories, Tags: taxonomy.Tags,
 	}
 	if query != "" {
@@ -122,7 +129,7 @@ func (h *publicHandler) rss(w http.ResponseWriter, r *http.Request) {
 		h.error(w, r, http.StatusInternalServerError, "We could not prepare the RSS feed.")
 		return
 	}
-	feed, err := site.NewRSS(publicBaseURL(r), time.Now)
+	feed, err := site.NewRSS(h.publicBaseURL.String(), h.clock)
 	if err != nil {
 		h.error(w, r, http.StatusInternalServerError, "We could not prepare the RSS feed.")
 		return
@@ -141,7 +148,7 @@ func (h *publicHandler) sitemap(w http.ResponseWriter, r *http.Request) {
 		h.error(w, r, http.StatusInternalServerError, "We could not prepare the sitemap.")
 		return
 	}
-	sitemap, err := site.NewSitemap(publicBaseURL(r), time.Now)
+	sitemap, err := site.NewSitemap(h.publicBaseURL.String(), h.clock)
 	if err != nil {
 		h.error(w, r, http.StatusInternalServerError, "We could not prepare the sitemap.")
 		return
@@ -168,7 +175,7 @@ func (h *publicHandler) renderListing(w http.ResponseWriter, r *http.Request, te
 	data.Posts = items
 	data.Categories = taxonomy.Categories
 	data.Tags = taxonomy.Tags
-	data.CanonicalURL = canonicalURL(r)
+	data.CanonicalURL = h.publicURLFor(r.URL.Path)
 	h.render(w, http.StatusOK, templateName, data)
 }
 
@@ -193,18 +200,18 @@ func (h *publicHandler) article(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := pageData{
-		Title: post.Title, Description: post.Summary, CanonicalURL: canonicalURL(r), Post: post,
+		Title: post.Title, Description: post.Summary, CanonicalURL: h.publicURLFor(r.URL.Path), Post: post,
 		Body: template.HTML(post.ContentHTML), Headings: rendered.Headings, ReadingMinutes: rendered.ReadingMinutes,
 		Categories: taxonomy.Categories, Tags: taxonomy.Tags,
 	}
 	if post.CoverMediaPath != "" {
-		data.OpenGraphImage = mediaURL(r, post.CoverMediaPath)
+		data.OpenGraphImage = h.mediaURL(post.CoverMediaPath)
 	}
 	h.render(w, http.StatusOK, "article.html", data)
 }
 
 func (h *publicHandler) error(w http.ResponseWriter, r *http.Request, status int, description string) {
-	h.render(w, status, "error.html", pageData{Title: "Not found", Heading: "Nothing here", Description: description, CanonicalURL: canonicalURL(r), Status: status})
+	h.render(w, status, "error.html", pageData{Title: "Not found", Heading: "Nothing here", Description: description, CanonicalURL: h.publicURLFor(r.URL.Path), Status: status})
 }
 
 func (h *publicHandler) render(w http.ResponseWriter, status int, pageTemplate string, data pageData) {
@@ -281,25 +288,36 @@ func (data *pageData) applySEO(status int) {
 	}
 }
 
-func canonicalURL(r *http.Request) string {
-	return (&url.URL{Scheme: requestScheme(r), Host: r.Host, Path: r.URL.Path}).String()
-}
-
-func publicBaseURL(r *http.Request) string {
-	return (&url.URL{Scheme: requestScheme(r), Host: r.Host}).String()
-}
-
-func requestScheme(r *http.Request) string {
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	} else if forwarded := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0]); forwarded == "https" || forwarded == "http" {
-		scheme = forwarded
+func normalizePublicURL(value string) (*url.URL, error) {
+	parsed, err := url.Parse(strings.TrimSpace(value))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.User != nil {
+		return nil, fmt.Errorf("invalid public URL %q", value)
 	}
-	return scheme
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, fmt.Errorf("invalid public URL scheme %q", parsed.Scheme)
+	}
+	parsed.Scheme = strings.ToLower(parsed.Scheme)
+	parsed.Host = strings.ToLower(parsed.Host)
+	parsed.Path = strings.TrimSuffix(parsed.Path, "/")
+	parsed.RawPath = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed, nil
 }
 
-func mediaURL(r *http.Request, path string) string {
-	parts := append([]string{"media"}, strings.Split(path, "/")...)
-	return (&url.URL{Scheme: requestScheme(r), Host: r.Host, Path: "/" + strings.Join(parts, "/")}).String()
+func (h *publicHandler) publicURLFor(requestPath string) string {
+	result := *h.publicBaseURL
+	basePath := strings.TrimSuffix(result.Path, "/")
+	suffix := strings.TrimPrefix(requestPath, "/")
+	if suffix == "" {
+		result.Path = basePath + "/"
+	} else {
+		result.Path = basePath + "/" + suffix
+	}
+	result.RawPath = ""
+	return result.String()
+}
+
+func (h *publicHandler) mediaURL(path string) string {
+	return h.publicURLFor("/media/" + strings.TrimPrefix(path, "/"))
 }

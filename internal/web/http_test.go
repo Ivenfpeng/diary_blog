@@ -18,6 +18,8 @@ import (
 	web "github.com/Ivenfpeng/diary_blog/internal/web"
 )
 
+const defaultPublicURL = "http://localhost:8080"
+
 func TestPublicArticleRendersCanonicalSafeContentReadingTimeAndTOC(t *testing.T) {
 	repo, published, _, closeDB := publicFixture(t)
 	t.Cleanup(closeDB)
@@ -26,13 +28,13 @@ func TestPublicArticleRendersCanonicalSafeContentReadingTimeAndTOC(t *testing.T)
 
 	body := getHTML(t, server.URL+"/posts/reading-safely")
 	for _, want := range []string{
-		`<link rel="canonical" href="` + server.URL + `/posts/reading-safely">`,
+		`<link rel="canonical" href="` + defaultPublicURL + `/posts/reading-safely">`,
 		`<title>Reading Safely`,
 		`<meta name="description" content="A published article.">`,
 		`<meta name="robots" content="index,follow">`,
 		`<meta property="og:title" content="Reading Safely">`,
 		`<meta property="og:description" content="A published article.">`,
-		`<meta property="og:url" content="` + server.URL + `/posts/reading-safely">`,
+		`<meta property="og:url" content="` + defaultPublicURL + `/posts/reading-safely">`,
 		`<p>Visible paragraph.</p>`,
 		`1 min read`,
 		`href="#getting-started"`,
@@ -62,10 +64,10 @@ func TestPublicListingRoutesRenderPublishedHTMLOnly(t *testing.T) {
 				"<!doctype html>", "Reading Safely",
 				`<meta name="description" content=`,
 				`<meta name="robots" content="index,follow">`,
-				`<link rel="canonical" href="` + server.URL + path + `">`,
+				`<link rel="canonical" href="` + defaultPublicURL + path + `">`,
 				`<meta property="og:title" content=`,
 				`<meta property="og:description" content=`,
-				`<meta property="og:url" content="` + server.URL + path + `">`,
+				`<meta property="og:url" content="` + defaultPublicURL + path + `">`,
 				`<meta property="og:type" content="website">`,
 			} {
 				if !strings.Contains(body, want) {
@@ -186,7 +188,7 @@ func TestPublicNavigationAndMobileTOCAreUsableWithoutJavaScript(t *testing.T) {
 	}
 }
 
-func TestPublicCanonicalURLUsesTLS(t *testing.T) {
+func TestPublicCanonicalURLUsesSafeDefault(t *testing.T) {
 	repo, _, _, closeDB := publicFixture(t)
 	t.Cleanup(closeDB)
 	server := httptest.NewTLSServer(web.NewServer(repo))
@@ -201,8 +203,8 @@ func TestPublicCanonicalURLUsesTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(body), `<link rel="canonical" href="`+server.URL+`/posts/reading-safely">`) {
-		t.Fatalf("TLS response did not use HTTPS canonical URL\n%s", body)
+	if !strings.Contains(string(body), `<link rel="canonical" href="`+defaultPublicURL+`/posts/reading-safely">`) {
+		t.Fatalf("response did not use the safe configured canonical default\n%s", body)
 	}
 }
 
@@ -232,8 +234,64 @@ func TestPublicArticleUsesPublishedCoverMediaForOpenGraph(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	body := getHTML(t, server.URL+"/posts/with-cover")
-	if !strings.Contains(body, `<meta property="og:image" content="`+server.URL+`/media/2026/09/cover.png">`) {
+	if !strings.Contains(body, `<meta property="og:image" content="`+defaultPublicURL+`/media/2026/09/cover.png">`) {
 		t.Fatalf("article response did not include the published cover as og:image\n%s", body)
+	}
+}
+
+func TestPublicURLsUseConfiguredOriginDespiteHostAndForwardedHeaders(t *testing.T) {
+	repo, _, db, closeDB := publicFixture(t)
+	t.Cleanup(closeDB)
+	now := time.Date(2026, 9, 4, 13, 0, 0, 0, time.UTC)
+	result, err := db.Exec(`INSERT INTO media (path, mime_type, width, height, size, alt_text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, "2026/09/cover.png", "image/png", 1200, 630, 1, "Cover", now.Format(time.RFC3339))
+	if err != nil {
+		t.Fatal(err)
+	}
+	coverID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := posts.NewService(repo, content.NewRenderer(), func() time.Time { return now })
+	post, err := service.CreateDraft(context.Background(), content.PostInput{
+		Slug: "configured-origin", Title: "Configured origin", Summary: "Uses the configured origin.", ContentMD: "body", CoverMediaID: &coverID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Publish(context.Background(), post.ID, post.Revision); err != nil {
+		t.Fatal(err)
+	}
+	const publicURL = "https://diary.example/blog/"
+	server := httptest.NewServer(web.NewServer(repo, web.ServerOptions{PublicURL: publicURL}))
+	t.Cleanup(server.Close)
+
+	for _, check := range []struct {
+		path  string
+		wants []string
+	}{
+		{path: "/posts/configured-origin", wants: []string{
+			`<link rel="canonical" href="https://diary.example/blog/posts/configured-origin">`,
+			`<meta property="og:url" content="https://diary.example/blog/posts/configured-origin">`,
+			`<meta property="og:image" content="https://diary.example/blog/media/2026/09/cover.png">`,
+		}},
+		{path: "/search?q=Configured", wants: []string{
+			`<link rel="canonical" href="https://diary.example/blog/search">`,
+			`<meta property="og:url" content="https://diary.example/blog/search">`,
+		}},
+		{path: "/rss.xml", wants: []string{"https://diary.example/blog/posts/configured-origin"}},
+		{path: "/sitemap.xml", wants: []string{"https://diary.example/blog/posts/configured-origin"}},
+	} {
+		t.Run(check.path, func(t *testing.T) {
+			body := hostileBody(t, server.URL+check.path)
+			for _, want := range check.wants {
+				if !strings.Contains(body, want) {
+					t.Fatalf("GET %s missing configured public URL %q\n%s", check.path, want, body)
+				}
+			}
+			if strings.Contains(body, "attacker.example") {
+				t.Fatalf("GET %s trusted request origin\n%s", check.path, body)
+			}
+		})
 	}
 }
 
@@ -257,7 +315,7 @@ func TestSearchEscapesSnippetsAndMarksResultPagesNoIndex(t *testing.T) {
 	body := getHTML(t, server.URL+"/search?q=Unsafe")
 	for _, want := range []string{
 		`<meta name="robots" content="noindex,follow">`,
-		`<link rel="canonical" href="` + server.URL + `/search">`,
+		`<link rel="canonical" href="` + defaultPublicURL + `/search">`,
 		`<h1>Search</h1>`,
 		`Unsafe snippet`,
 		`&lt;script&gt;`,
@@ -319,7 +377,7 @@ func TestRSSAndSitemapOnlyExposePublishedPosts(t *testing.T) {
 		if response.StatusCode != http.StatusOK || !strings.HasPrefix(response.Header.Get("Content-Type"), "application/xml") {
 			t.Fatalf("GET %s status/content type = %d/%q", path, response.StatusCode, response.Header.Get("Content-Type"))
 		}
-		if !strings.Contains(string(body), server.URL+"/posts/reading-safely") || strings.Contains(string(body), "draft-only") || strings.Contains(string(body), "archived-only") {
+		if !strings.Contains(string(body), defaultPublicURL+"/posts/reading-safely") || strings.Contains(string(body), "draft-only") || strings.Contains(string(body), "archived-only") {
 			t.Fatalf("GET %s did not expose only published posts\n%s", path, body)
 		}
 	}
@@ -392,6 +450,30 @@ func getHTML(t *testing.T, url string) string {
 	}
 	if contentType := response.Header.Get("Content-Type"); !strings.HasPrefix(contentType, "text/html") {
 		t.Fatalf("GET %s Content-Type = %q, want text/html", url, contentType)
+	}
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(body)
+}
+
+func hostileBody(t *testing.T, target string) string {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodGet, target, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Host = "attacker.example"
+	request.Header.Set("X-Forwarded-Host", "attacker.example")
+	request.Header.Set("X-Forwarded-Proto", "http")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = response.Body.Close() })
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s status = %d, want %d", target, response.StatusCode, http.StatusOK)
 	}
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
