@@ -28,6 +28,11 @@ func TestPublicArticleRendersCanonicalSafeContentReadingTimeAndTOC(t *testing.T)
 	for _, want := range []string{
 		`<link rel="canonical" href="` + server.URL + `/posts/reading-safely">`,
 		`<title>Reading Safely`,
+		`<meta name="description" content="A published article.">`,
+		`<meta name="robots" content="index,follow">`,
+		`<meta property="og:title" content="Reading Safely">`,
+		`<meta property="og:description" content="A published article.">`,
+		`<meta property="og:url" content="` + server.URL + `/posts/reading-safely">`,
 		`<p>Visible paragraph.</p>`,
 		`1 min read`,
 		`href="#getting-started"`,
@@ -53,6 +58,20 @@ func TestPublicListingRoutesRenderPublishedHTMLOnly(t *testing.T) {
 	for _, path := range []string{"/", "/categories/databases", "/tags/go", "/archive"} {
 		t.Run(path, func(t *testing.T) {
 			body := getHTML(t, server.URL+path)
+			for _, want := range []string{
+				"<!doctype html>", "Reading Safely",
+				`<meta name="description" content=`,
+				`<meta name="robots" content="index,follow">`,
+				`<link rel="canonical" href="` + server.URL + path + `">`,
+				`<meta property="og:title" content=`,
+				`<meta property="og:description" content=`,
+				`<meta property="og:url" content="` + server.URL + path + `">`,
+				`<meta property="og:type" content="website">`,
+			} {
+				if !strings.Contains(body, want) {
+					t.Fatalf("%s did not render public SEO field %q\n%s", path, want, body)
+				}
+			}
 			if !strings.Contains(body, "<!doctype html>") || !strings.Contains(body, "Reading Safely") {
 				t.Fatalf("%s did not render full published HTML\n%s", path, body)
 			}
@@ -185,6 +204,135 @@ func TestPublicCanonicalURLUsesTLS(t *testing.T) {
 	if !strings.Contains(string(body), `<link rel="canonical" href="`+server.URL+`/posts/reading-safely">`) {
 		t.Fatalf("TLS response did not use HTTPS canonical URL\n%s", body)
 	}
+}
+
+func TestPublicArticleUsesPublishedCoverMediaForOpenGraph(t *testing.T) {
+	repo, _, db, closeDB := publicFixture(t)
+	t.Cleanup(closeDB)
+	now := time.Date(2026, 9, 4, 13, 0, 0, 0, time.UTC)
+	result, err := db.Exec(`INSERT INTO media (path, mime_type, width, height, size, alt_text, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, "2026/09/cover.png", "image/png", 1200, 630, 1, "Cover", now.Format(time.RFC3339))
+	if err != nil {
+		t.Fatal(err)
+	}
+	coverID, err := result.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := posts.NewService(repo, content.NewRenderer(), func() time.Time { return now })
+	post, err := service.CreateDraft(context.Background(), content.PostInput{
+		Slug: "with-cover", Title: "With cover", Summary: "Published cover description.", ContentMD: "body", CoverMediaID: &coverID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Publish(context.Background(), post.ID, post.Revision); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(web.NewServer(repo))
+	t.Cleanup(server.Close)
+
+	body := getHTML(t, server.URL+"/posts/with-cover")
+	if !strings.Contains(body, `<meta property="og:image" content="`+server.URL+`/media/2026/09/cover.png">`) {
+		t.Fatalf("article response did not include the published cover as og:image\n%s", body)
+	}
+}
+
+func TestSearchEscapesSnippetsAndMarksResultPagesNoIndex(t *testing.T) {
+	repo, _, _, closeDB := publicFixture(t)
+	t.Cleanup(closeDB)
+	now := time.Date(2026, 9, 4, 13, 0, 0, 0, time.UTC)
+	service := posts.NewService(repo, content.NewRenderer(), func() time.Time { return now })
+	unsafe, err := service.CreateDraft(context.Background(), content.PostInput{
+		Slug: "unsafe-snippet", Title: "Unsafe snippet", Summary: "Summary <script>alert('unsafe')</script>", ContentMD: "safe body",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Publish(context.Background(), unsafe.ID, unsafe.Revision); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(web.NewServer(repo))
+	t.Cleanup(server.Close)
+
+	body := getHTML(t, server.URL+"/search?q=Unsafe")
+	for _, want := range []string{
+		`<meta name="robots" content="noindex,follow">`,
+		`<link rel="canonical" href="` + server.URL + `/search">`,
+		`<h1>Search</h1>`,
+		`Unsafe snippet`,
+		`&lt;script&gt;`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("search response missing %q\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, `<script>alert('unsafe')</script>`) {
+		t.Fatalf("search response rendered an unsafe snippet\n%s", body)
+	}
+}
+
+func TestEmptySearchRendersInstructionsWithoutFTS(t *testing.T) {
+	repo, _, _, closeDB := publicFixture(t)
+	t.Cleanup(closeDB)
+	spy := &searchSpyRepository{Repository: repo}
+	server := httptest.NewServer(web.NewServer(spy))
+	t.Cleanup(server.Close)
+
+	body := getHTML(t, server.URL+"/search?q=%20%20")
+	if !strings.Contains(body, "Enter a word or phrase to search published articles.") {
+		t.Fatalf("empty search did not render instructions\n%s", body)
+	}
+	if spy.searchCalls != 0 {
+		t.Fatalf("empty search called FTS %d times", spy.searchCalls)
+	}
+}
+
+func TestRSSAndSitemapOnlyExposePublishedPosts(t *testing.T) {
+	repo, _, _, closeDB := publicFixture(t)
+	t.Cleanup(closeDB)
+	now := time.Date(2026, 9, 4, 13, 0, 0, 0, time.UTC)
+	service := posts.NewService(repo, content.NewRenderer(), func() time.Time { return now })
+	archived, err := service.CreateDraft(context.Background(), content.PostInput{Slug: "archived-only", Title: "Archived only", ContentMD: "private"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	archived, err = service.Publish(context.Background(), archived.ID, archived.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Archive(context.Background(), archived.ID, archived.Revision); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(web.NewServer(repo))
+	t.Cleanup(server.Close)
+
+	for _, path := range []string{"/rss.xml", "/sitemap.xml"} {
+		response, err := http.Get(server.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, err := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if response.StatusCode != http.StatusOK || !strings.HasPrefix(response.Header.Get("Content-Type"), "application/xml") {
+			t.Fatalf("GET %s status/content type = %d/%q", path, response.StatusCode, response.Header.Get("Content-Type"))
+		}
+		if !strings.Contains(string(body), server.URL+"/posts/reading-safely") || strings.Contains(string(body), "draft-only") || strings.Contains(string(body), "archived-only") {
+			t.Fatalf("GET %s did not expose only published posts\n%s", path, body)
+		}
+	}
+}
+
+type searchSpyRepository struct {
+	posts.Repository
+	searchCalls int
+}
+
+func (r *searchSpyRepository) SearchPublished(ctx context.Context, query string, page, pageSize int) ([]posts.PublishedPost, int, error) {
+	r.searchCalls++
+	return r.Repository.SearchPublished(ctx, query, page, pageSize)
 }
 
 func publicFixture(t *testing.T) (posts.Repository, content.Post, *sql.DB, func()) {

@@ -1,0 +1,25 @@
+{{define "page"}}
+<section class="listing-header">
+  <p class="eyebrow">Search</p>
+  <h1>{{.Heading}}</h1>
+  <form action="/search" method="get" role="search">
+    <label for="search-query">Search published articles</label>
+    <input id="search-query" name="q" type="search" value="{{.SearchQuery}}">
+    <button type="submit">Search</button>
+  </form>
+</section>
+{{if .SearchQuery}}
+<section class="post-list" aria-label="Search results">
+  {{if .SearchTotal}}<p>{{.SearchTotal}} result{{if ne .SearchTotal 1}}s{{end}} for <strong>{{.SearchQuery}}</strong>.</p>{{end}}
+  {{range .Posts}}
+  <article class="post-row">
+    <div class="post-row-date">{{formatDate .PublishedAt}}</div>
+    <div><h2><a href="/posts/{{.Slug}}">{{.Title}}</a></h2>{{if .Summary}}<p>{{.Summary}}</p>{{end}}</div>
+    <a class="row-arrow" href="/posts/{{.Slug}}" aria-label="Read {{.Title}}">↗</a>
+  </article>
+  {{else}}<p class="empty-state">No published articles matched that search.</p>{{end}}
+</section>
+{{else}}
+<p class="empty-state">Enter a word or phrase to search published articles.</p>
+{{end}}
+{{end}}

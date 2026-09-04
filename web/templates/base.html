@@ -5,8 +5,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="{{.Description}}">
+	<meta name="robots" content="{{.Robots}}">
     <title>{{.Title}} · Diary Blog</title>
     {{if .CanonicalURL}}<link rel="canonical" href="{{.CanonicalURL}}">{{end}}
+	<meta property="og:title" content="{{.OpenGraphTitle}}">
+	<meta property="og:description" content="{{.OpenGraphDescription}}">
+	<meta property="og:url" content="{{.OpenGraphURL}}">
+	<meta property="og:type" content="{{.OpenGraphType}}">
+	{{if .OpenGraphImage}}<meta property="og:image" content="{{.OpenGraphImage}}">{{end}}
     <link rel="stylesheet" href="/static/site.css">
     <script src="/static/site.js" defer></script>
   </head>

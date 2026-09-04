@@ -552,10 +552,10 @@ func getPublishedPost(ctx context.Context, q queryer, id int64) (posts.Published
 	var post posts.PublishedPost
 	var publishedAt string
 	err := q.QueryRowContext(ctx, `
-		SELECT post_id, slug, title, summary, content_md, content_html, content_plain, published_at
+		SELECT post_id, slug, title, summary, content_md, content_html, content_plain, cover_media_path, published_at
 		FROM published_posts WHERE post_id = ?`, id).Scan(
 		&post.ID, &post.Slug, &post.Title, &post.Summary, &post.ContentMD, &post.ContentHTML,
-		&post.ContentPlain, &publishedAt,
+		&post.ContentPlain, &post.CoverMediaPath, &publishedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return posts.PublishedPost{}, posts.ErrNotFound
@@ -718,13 +718,13 @@ func replacePublishedSnapshot(ctx context.Context, tx *sql.Tx, post content.Post
 		publishedAt = *post.PublishedAt
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO published_posts (post_id, slug, title, summary, content_md, content_html, content_plain, published_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO published_posts (post_id, slug, title, summary, content_md, content_html, content_plain, cover_media_path, published_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT path FROM media WHERE id = ?), ''), ?)
 		ON CONFLICT(post_id) DO UPDATE SET
 			slug = excluded.slug, title = excluded.title, summary = excluded.summary,
 			content_md = excluded.content_md, content_html = excluded.content_html, content_plain = excluded.content_plain,
-			published_at = excluded.published_at`,
-		post.ID, post.Slug, post.Title, post.Summary, post.ContentMD, rendered.HTML, rendered.PlainText, formatTime(publishedAt),
+			cover_media_path = excluded.cover_media_path, published_at = excluded.published_at`,
+		post.ID, post.Slug, post.Title, post.Summary, post.ContentMD, rendered.HTML, rendered.PlainText, post.CoverMediaID, formatTime(publishedAt),
 	); err != nil {
 		return fmt.Errorf("upsert published snapshot: %w", err)
 	}

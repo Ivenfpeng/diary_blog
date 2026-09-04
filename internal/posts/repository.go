@@ -30,16 +30,17 @@ type Taxonomy struct {
 // PublishedPost contains only the immutable fields visible on the public
 // site. Draft fields deliberately cannot leak through this view.
 type PublishedPost struct {
-	ID           int64
-	Slug         string
-	Title        string
-	Summary      string
-	ContentMD    string
-	ContentHTML  string
-	ContentPlain string
-	PublishedAt  time.Time
-	Category     *Taxonomy
-	Tags         []Taxonomy
+	ID             int64
+	Slug           string
+	Title          string
+	Summary        string
+	ContentMD      string
+	ContentHTML    string
+	ContentPlain   string
+	CoverMediaPath string
+	PublishedAt    time.Time
+	Category       *Taxonomy
+	Tags           []Taxonomy
 }
 
 type PublishedTaxonomy struct {

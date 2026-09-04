@@ -931,25 +931,25 @@ git commit -m "feat: add server-rendered public blog"
 - Modify: `internal/web/public.go`
 - Modify: `internal/web/http_test.go`
 
-- [ ] **Step 1: Write failing feed and search tests**
+- [x] **Step 1: Write failing feed and search tests**
 
 Assert RSS contains only published posts with absolute canonical URLs, sitemap excludes drafts and archives, search escapes snippets, and an empty search renders instructions without running FTS.
 
-- [ ] **Step 2: Run tests and confirm failure**
+- [x] **Step 2: Run tests and confirm failure**
 
 Run: `go test ./internal/site ./internal/web -run 'TestRSS|TestSitemap|TestSearch' -v`
 
 Expected: FAIL.
 
-- [ ] **Step 3: Implement deterministic generators**
+- [x] **Step 3: Implement deterministic generators**
 
 Use `encoding/xml` for RSS and sitemap. Inject public base URL and clock. Sort output by publication time and then slug. Limit RSS to the newest 20 posts and sitemap to published public routes.
 
-- [ ] **Step 4: Add SEO behavior**
+- [x] **Step 4: Add SEO behavior**
 
 Every public page view model must provide title, description, canonical URL, robots value, and Open Graph fields. Search result pages use `noindex,follow`. Article pages use summary as description and cover media when present.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `go test ./internal/site ./internal/web -v`
 
