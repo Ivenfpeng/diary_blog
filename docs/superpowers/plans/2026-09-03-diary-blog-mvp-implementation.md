@@ -691,7 +691,7 @@ git commit -m "feat: render safe Markdown content"
 - Create: `internal/repository/sqlite/posts.go`
 - Create: `internal/repository/sqlite/posts_test.go`
 
-- [ ] **Step 1: Define the repository contract**
+- [x] **Step 1: Define the repository contract**
 
 Create `internal/posts/repository.go`:
 
@@ -718,19 +718,19 @@ type Repository interface {
 }
 ```
 
-- [ ] **Step 2: Write failing repository integration tests**
+- [x] **Step 2: Write failing repository integration tests**
 
 Use a migrated temporary SQLite database. Test create/get, unique slug rejection, optimistic conflict, revision creation, 30-version retention, tag replacement, and revision restore.
 
 The conflict test must call `SaveDraft` twice with the same revision number and assert `errors.Is(err, posts.ErrConflict)` on the second call.
 
-- [ ] **Step 3: Run tests and confirm failure**
+- [x] **Step 3: Run tests and confirm failure**
 
 Run: `go test ./internal/repository/sqlite -run 'TestPostRepository' -v`
 
 Expected: FAIL because the SQLite repository is missing.
 
-- [ ] **Step 4: Implement draft transactions**
+- [x] **Step 4: Implement draft transactions**
 
 Implement `CreateDraft`, `GetByID`, `SaveDraft`, `ListRevisions`, and `RestoreRevision`. Every update must:
 
@@ -742,7 +742,7 @@ Implement `CreateDraft`, `GetByID`, `SaveDraft`, `ListRevisions`, and `RestoreRe
 6. Delete revisions older than the newest 30 for that post.
 7. Commit and return the complete post.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 
