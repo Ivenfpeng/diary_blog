@@ -9,6 +9,7 @@ const props = defineProps<{ modelValue: string }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 const host = ref<HTMLElement>()
 let view: EditorView | undefined
+let syncingFromParent = false
 
 onMounted(() => {
   if (!host.value) return
@@ -21,7 +22,7 @@ onMounted(() => {
         keymap.of(defaultKeymap),
         EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {
-          if (update.docChanged) emit('update:modelValue', update.state.doc.toString())
+          if (update.docChanged && !syncingFromParent) emit('update:modelValue', update.state.doc.toString())
         }),
       ],
     }),
@@ -30,7 +31,12 @@ onMounted(() => {
 
 watch(() => props.modelValue, (value) => {
   if (!view || value === view.state.doc.toString()) return
-  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } })
+  syncingFromParent = true
+  try {
+    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } })
+  } finally {
+    syncingFromParent = false
+  }
 })
 
 onBeforeUnmount(() => view?.destroy())
