@@ -12,7 +12,7 @@ import (
 
 func TestRSSIncludesNewestPublishedPostsWithAbsoluteURLs(t *testing.T) {
 	generatedAt := time.Date(2026, 9, 4, 12, 30, 0, 0, time.UTC)
-	feed, err := site.NewRSS("https://diary.example", func() time.Time { return generatedAt })
+	feed, err := site.NewRSS("https://diary.example/blog%20notes/", func() time.Time { return generatedAt })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestRSSIncludesNewestPublishedPostsWithAbsoluteURLs(t *testing.T) {
 	if document.Channel.Items[0].Title != "Post 01" || document.Channel.Items[1].Title != "Post 00" {
 		t.Fatalf("RSS order = %+v, want slug order for tied publication times", document.Channel.Items[:2])
 	}
-	if document.Channel.Items[0].Link != "https://diary.example/posts/a-newest" {
+	if document.Channel.Items[0].Link != "https://diary.example/blog%20notes/posts/a-newest" {
 		t.Fatalf("RSS first link = %q, want absolute canonical URL", document.Channel.Items[0].Link)
 	}
 	if strings.Contains(string(output), "post-20") {

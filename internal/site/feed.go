@@ -43,7 +43,7 @@ func (r *RSS) Generate(postsToPublish []posts.PublishedPost) ([]byte, error) {
 	document := rssDocument{Version: "2.0"}
 	document.Channel = rssChannel{
 		Title:         "Diary Blog",
-		Link:          r.baseURL.String(),
+		Link:          absoluteURL(r.baseURL),
 		Description:   "Diary Blog RSS feed",
 		LastBuildDate: r.now().UTC().Format(time.RFC1123Z),
 		Items:         make([]rssItem, 0, len(items)),
@@ -102,7 +102,8 @@ func parsePublicBaseURL(value string) (*url.URL, error) {
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return nil, fmt.Errorf("invalid public base URL scheme %q", parsed.Scheme)
 	}
-	parsed.Path = strings.TrimSuffix(parsed.EscapedPath(), "/")
+	parsed.Path = strings.TrimSuffix(parsed.Path, "/")
+	parsed.RawPath = ""
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 	return parsed, nil
@@ -115,11 +116,14 @@ func (r *RSS) urlFor(parts ...string) string {
 func absoluteURL(baseURL *url.URL, parts ...string) string {
 	copy := *baseURL
 	segments := make([]string, 0, len(parts)+1)
-	if path := strings.Trim(copy.EscapedPath(), "/"); path != "" {
+	if path := strings.Trim(copy.Path, "/"); path != "" {
 		segments = append(segments, path)
 	}
 	segments = append(segments, parts...)
 	copy.Path = "/" + strings.Join(segments, "/")
+	if len(parts) == 0 && !strings.HasSuffix(copy.Path, "/") {
+		copy.Path += "/"
+	}
 	copy.RawPath = ""
 	return copy.String()
 }

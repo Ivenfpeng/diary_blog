@@ -261,7 +261,7 @@ func TestPublicURLsUseConfiguredOriginDespiteHostAndForwardedHeaders(t *testing.
 	if _, err := service.Publish(context.Background(), post.ID, post.Revision); err != nil {
 		t.Fatal(err)
 	}
-	const publicURL = "https://diary.example/blog/"
+	const publicURL = "https://diary.example/blog%20notes/"
 	server := httptest.NewServer(web.NewServer(repo, web.ServerOptions{PublicURL: publicURL}))
 	t.Cleanup(server.Close)
 
@@ -270,16 +270,16 @@ func TestPublicURLsUseConfiguredOriginDespiteHostAndForwardedHeaders(t *testing.
 		wants []string
 	}{
 		{path: "/posts/configured-origin", wants: []string{
-			`<link rel="canonical" href="https://diary.example/blog/posts/configured-origin">`,
-			`<meta property="og:url" content="https://diary.example/blog/posts/configured-origin">`,
-			`<meta property="og:image" content="https://diary.example/blog/media/2026/09/cover.png">`,
+			`<link rel="canonical" href="https://diary.example/blog%20notes/posts/configured-origin">`,
+			`<meta property="og:url" content="https://diary.example/blog%20notes/posts/configured-origin">`,
+			`<meta property="og:image" content="https://diary.example/blog%20notes/media/2026/09/cover.png">`,
 		}},
 		{path: "/search?q=Configured", wants: []string{
-			`<link rel="canonical" href="https://diary.example/blog/search">`,
-			`<meta property="og:url" content="https://diary.example/blog/search">`,
+			`<link rel="canonical" href="https://diary.example/blog%20notes/search">`,
+			`<meta property="og:url" content="https://diary.example/blog%20notes/search">`,
 		}},
-		{path: "/rss.xml", wants: []string{"https://diary.example/blog/posts/configured-origin"}},
-		{path: "/sitemap.xml", wants: []string{"https://diary.example/blog/posts/configured-origin"}},
+		{path: "/rss.xml", wants: []string{"https://diary.example/blog%20notes/posts/configured-origin"}},
+		{path: "/sitemap.xml", wants: []string{"https://diary.example/blog%20notes/posts/configured-origin"}},
 	} {
 		t.Run(check.path, func(t *testing.T) {
 			body := hostileBody(t, server.URL+check.path)

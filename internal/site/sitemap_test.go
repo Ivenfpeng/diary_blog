@@ -11,7 +11,7 @@ import (
 
 func TestSitemapIncludesOnlyPublishedPublicRoutes(t *testing.T) {
 	generatedAt := time.Date(2026, 9, 4, 12, 30, 0, 0, time.UTC)
-	sitemap, err := site.NewSitemap("https://diary.example", func() time.Time { return generatedAt })
+	sitemap, err := site.NewSitemap("https://diary.example/blog%20notes/", func() time.Time { return generatedAt })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,21 +37,21 @@ func TestSitemapIncludesOnlyPublishedPublicRoutes(t *testing.T) {
 		locations = append(locations, entry.Location)
 	}
 	for _, want := range []string{
-		"https://diary.example/",
-		"https://diary.example/archive",
-		"https://diary.example/categories/go",
-		"https://diary.example/tags/testing",
-		"https://diary.example/posts/later",
-		"https://diary.example/posts/earlier",
+		"https://diary.example/blog%20notes/",
+		"https://diary.example/blog%20notes/archive",
+		"https://diary.example/blog%20notes/categories/go",
+		"https://diary.example/blog%20notes/tags/testing",
+		"https://diary.example/blog%20notes/posts/later",
+		"https://diary.example/blog%20notes/posts/earlier",
 	} {
 		if !contains(locations, want) {
 			t.Fatalf("sitemap locations = %v, missing %q", locations, want)
 		}
 	}
-	if contains(locations, "https://diary.example/posts/draft-only") || contains(locations, "https://diary.example/posts/archived-only") {
+	if contains(locations, "https://diary.example/blog%20notes/posts/draft-only") || contains(locations, "https://diary.example/blog%20notes/posts/archived-only") {
 		t.Fatalf("sitemap leaked non-public routes: %v", locations)
 	}
-	if document.URLs[4].Location != "https://diary.example/posts/later" || document.URLs[4].LastMod != "2026-09-04" {
+	if document.URLs[4].Location != "https://diary.example/blog%20notes/posts/later" || document.URLs[4].LastMod != "2026-09-04" {
 		t.Fatalf("published URLs were not deterministically ordered: %+v", document.URLs)
 	}
 }
