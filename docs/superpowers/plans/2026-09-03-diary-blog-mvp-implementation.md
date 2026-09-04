@@ -1011,7 +1011,7 @@ git commit -m "feat: secure administrator sessions"
 - Create: `internal/web/admin_api_test.go`
 - Modify: `internal/web/server.go`
 
-- [ ] **Step 1: Write failing API contract tests**
+- [x] **Step 1: Write failing API contract tests**
 
 Cover create, get, list, autosave, preview, publish, archive, revisions, restore, unauthenticated access, validation errors, not-found errors, and `409 conflict`. Assert the stable error shape:
 
@@ -1026,21 +1026,21 @@ Cover create, get, list, autosave, preview, publish, archive, revisions, restore
 }
 ```
 
-- [ ] **Step 2: Run tests and confirm failure**
+- [x] **Step 2: Run tests and confirm failure**
 
 Run: `go test ./internal/web -run 'TestAdminPostAPI' -v`
 
 Expected: FAIL.
 
-- [ ] **Step 3: Implement request and response models**
+- [x] **Step 3: Implement request and response models**
 
 Use strict JSON decoding with unknown fields rejected and a 2 MiB body limit. Return `201` for draft creation, `200` for save/preview/publish, `204` for delete-like session operations, `400` for malformed input, `401` for missing session, `403` for CSRF, `404` for missing resources, and `409` for revision conflicts.
 
-- [ ] **Step 4: Register routes**
+- [x] **Step 4: Register routes**
 
 Register explicit methods for `/api/admin/posts`, `/api/admin/posts/{id}`, `/preview`, `/publish`, `/archive`, `/revisions`, and `/revisions/{revisionID}/restore`. Do not expose a generic catch-all CRUD handler.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `go test ./internal/web -run 'TestAdminPostAPI' -v && go test ./...`
 
