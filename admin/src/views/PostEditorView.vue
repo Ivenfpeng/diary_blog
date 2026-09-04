@@ -1,0 +1,138 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { ArrowLeft, Save } from '@lucide/vue'
+import { useRoute, useRouter } from 'vue-router'
+import MarkdownEditor from '../components/MarkdownEditor.vue'
+import PublishPanel from '../components/PublishPanel.vue'
+import RevisionPanel, { type PostRevision } from '../components/RevisionPanel.vue'
+import { apiRequest } from '../api/client'
+import { createEditorState, type EditablePost } from '../state/editor'
+
+const route = useRoute()
+const router = useRouter()
+const revisions = ref<PostRevision[]>([])
+const loading = ref(true)
+const restoring = ref(false)
+const errorMessage = ref('')
+const postID = computed(() => Number(route.params.id))
+
+const editor = createEditorState(async (article) => {
+  const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${article.id}`, {
+    method: 'PUT',
+    body: {
+      slug: article.slug,
+      title: article.title,
+      summary: article.summary,
+      content_md: article.content_md,
+      category_id: article.category_id,
+      cover_media_id: article.cover_media_id ?? null,
+      tag_ids: article.tag_ids,
+      expected_revision: article.expected_revision,
+    },
+  })
+  return response.post
+})
+
+const canPublish = computed(() => Boolean(editor.article.title.trim() && editor.article.slug.trim() && editor.article.content_md.trim()) && !editor.saving.value)
+const saveLabel = computed(() => ({ idle: editor.dirty.value ? 'Unsaved changes' : 'Saved', saving: 'Saving…', saved: 'Saved', error: 'Save failed', conflict: 'Conflict detected' }[editor.saveStatus.value]))
+
+function updateField(field: 'title' | 'slug' | 'summary' | 'content_md', value: string): void {
+  editor.update({ [field]: value })
+}
+
+function numericValue(value: string): number | null {
+  const number = Number(value)
+  return Number.isInteger(number) && number > 0 ? number : null
+}
+
+function updateCategory(value: string): void { editor.update({ category_id: numericValue(value) }) }
+function updateTags(value: string): void {
+  editor.update({ tag_ids: value.split(',').map((entry) => Number(entry.trim())).filter((id) => Number.isInteger(id) && id > 0) })
+}
+
+async function load(): Promise<void> {
+  if (!Number.isInteger(postID.value) || postID.value < 1) {
+    errorMessage.value = 'This article could not be found.'
+    loading.value = false
+    return
+  }
+  try {
+    const [postResponse, revisionResponse] = await Promise.all([
+      apiRequest<{ post: EditablePost }>(`/api/admin/posts/${postID.value}`),
+      apiRequest<{ revisions: PostRevision[] }>(`/api/admin/posts/${postID.value}/revisions`),
+    ])
+    editor.load(postResponse.post)
+    revisions.value = revisionResponse.revisions ?? []
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Unable to load this article.'
+  } finally {
+    loading.value = false
+  }
+}
+
+async function saveNow(): Promise<void> { await editor.save() }
+async function preview(): Promise<void> {
+  const response = await apiRequest<{ html: string }>(`/api/admin/posts/${editor.article.id}/preview`, { method: 'POST', body: { content_md: editor.article.content_md } })
+  editor.previewHTML.value = response.html
+}
+async function publish(): Promise<void> {
+  if (!canPublish.value) return
+  if (editor.dirty.value) await editor.save()
+  if (editor.dirty.value || editor.conflict.value) return
+  const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${editor.article.id}/publish`, { method: 'POST', body: { expected_revision: editor.revision.value } })
+  editor.load(response.post)
+}
+async function archive(): Promise<void> {
+  const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${editor.article.id}/archive`, { method: 'POST', body: { expected_revision: editor.revision.value } })
+  editor.load(response.post)
+}
+async function restore(revision: PostRevision): Promise<void> {
+  restoring.value = true
+  try {
+    const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${editor.article.id}/revisions/${revision.id}/restore`, { method: 'POST', body: { expected_revision: editor.revision.value } })
+    editor.load(response.post)
+    await load()
+  } finally {
+    restoring.value = false
+  }
+}
+
+onMounted(load)
+</script>
+
+<template>
+  <section class="editor-view" aria-labelledby="editor-heading">
+    <RouterLink :to="{ name: 'posts' }" class="back-link"><ArrowLeft :size="16" aria-hidden="true" /> All posts</RouterLink>
+    <div class="editor-heading"><div><p class="eyebrow">Article editor</p><h1 id="editor-heading">{{ editor.article.title || 'Untitled article' }}</h1></div><span class="save-status" :class="editor.saveStatus.value">{{ saveLabel }}</span></div>
+    <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
+    <p v-else-if="loading" class="muted">Loading article…</p>
+    <template v-else>
+      <p v-if="editor.conflict.value" class="form-error" role="alert">This article changed elsewhere. Your local Markdown is preserved; reload before saving again.</p>
+      <form class="editor-form" @submit.prevent="saveNow">
+        <label>Title <input id="title" :value="editor.article.title" required @input="updateField('title', ($event.target as HTMLInputElement).value)" /></label>
+        <label>Slug <input id="slug" :value="editor.article.slug" required pattern="[a-z0-9-]+" @input="updateField('slug', ($event.target as HTMLInputElement).value)" /></label>
+        <label class="wide">Summary <textarea id="summary" :value="editor.article.summary" rows="3" @input="updateField('summary', ($event.target as HTMLTextAreaElement).value)" /></label>
+        <label>Category ID <input id="category" :value="editor.article.category_id ?? ''" inputmode="numeric" @input="updateCategory(($event.target as HTMLInputElement).value)" /></label>
+        <label>Tag IDs <input id="tags" :value="editor.article.tag_ids.join(', ')" placeholder="1, 4, 8" @input="updateTags(($event.target as HTMLInputElement).value)" /></label>
+        <label class="wide">Markdown <MarkdownEditor :model-value="editor.article.content_md" @update:model-value="updateField('content_md', $event)" /></label>
+        <div class="editor-actions"><button type="submit" class="secondary-button" :disabled="editor.saving.value || !editor.dirty.value"><Save :size="16" aria-hidden="true" /> Save now</button><PublishPanel :can-publish="canPublish" :saving="editor.saving.value" :status="editor.article.status" @preview="preview" @publish="publish" @archive="archive" /></div>
+      </form>
+      <section v-if="editor.previewHTML.value" class="preview" aria-labelledby="preview-heading"><h2 id="preview-heading">Preview</h2><div v-html="editor.previewHTML.value" /></section>
+      <RevisionPanel :revisions="revisions" :restoring="restoring" @restore="restore" />
+    </template>
+  </section>
+</template>
+
+<style scoped>
+.editor-view { max-width: 1060px; }
+.back-link { display: inline-flex; align-items: center; gap: 5px; margin-bottom: 20px; color: #285e48; font-size: 14px; font-weight: 650; text-decoration: none; }
+.editor-heading { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 22px; }
+h1 { margin: 0; font-size: 28px; letter-spacing: -.025em; }
+.save-status { color: #637168; font-size: 13px; white-space: nowrap; }.save-status.saving { color: #356b54; }.save-status.conflict, .save-status.error { color: #a33a32; }
+.editor-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+label { display: grid; gap: 6px; color: #39463e; font-size: 13px; font-weight: 650; }.wide { grid-column: 1 / -1; }
+input, textarea { min-width: 0; border: 1px solid #b9c5be; border-radius: 3px; padding: 9px 10px; font: inherit; background: #fff; } textarea { resize: vertical; }
+.editor-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border-top: 1px solid #d9dfdb; padding-top: 16px; }.secondary-button { min-height: 38px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border: 1px solid #9eaea5; border-radius: 3px; background: #fff; color: #193d2f; font: inherit; font-weight: 650; cursor: pointer; }
+.preview { border-top: 1px solid #d9dfdb; margin-top: 26px; padding-top: 20px; }.preview h2 { margin: 0 0 12px; font-size: 18px; }.muted { color: #68756d; }
+@media (max-width: 640px) { .editor-form { grid-template-columns: 1fr; }.wide, .editor-actions { grid-column: auto; }.editor-heading { align-items: flex-start; flex-direction: column; } }
+</style>

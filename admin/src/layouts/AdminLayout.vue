@@ -17,10 +17,10 @@ const closeNavigation = () => { navigationOpen.value = false }
           <LayoutDashboard :size="18" aria-hidden="true" />
           Overview
         </RouterLink>
-        <span class="nav-link nav-link-disabled" aria-disabled="true">
+        <RouterLink :to="{ name: 'posts' }" class="nav-link" @click="closeNavigation">
           <FileText :size="18" aria-hidden="true" />
           Posts
-        </span>
+        </RouterLink>
       </nav>
     </aside>
     <div class="admin-workspace">
