@@ -2,32 +2,27 @@
 package web
 
 import (
-	"context"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
 	"path/filepath"
-	"runtime/debug"
 	"time"
 
+	"github.com/Ivenfpeng/diary_blog/internal/auth"
 	"github.com/Ivenfpeng/diary_blog/internal/posts"
 	webassets "github.com/Ivenfpeng/diary_blog/web"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 )
-
-type contextKey string
-
-const requestIDKey contextKey = "request_id"
 
 // ServerOptions configures filesystem resources that are intentionally kept
 // outside the executable image.
 type ServerOptions struct {
-	MediaDir  string
-	Logger    *slog.Logger
-	PublicURL string
-	Clock     func() time.Time
+	MediaDir       string
+	Logger         *slog.Logger
+	PublicURL      string
+	Clock          func() time.Time
+	AuthRepository auth.Repository
 }
 
 // NewServer builds the public HTTP surface. Options are optional so the
@@ -55,6 +50,16 @@ func NewServer(repository posts.Repository, options ...ServerOptions) http.Handl
 	router.Use(requestID, recoverPanics(config.Logger), accessLog(config.Logger))
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	router.Get("/readyz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	if config.AuthRepository == nil {
+		config.AuthRepository, _ = repository.(auth.Repository)
+	}
+	if config.AuthRepository != nil {
+		authAPI, err := newAuthHandler(config.AuthRepository, public.publicBaseURL, config.Clock)
+		if err != nil {
+			panic(fmt.Sprintf("initialize authentication: %v", err))
+		}
+		authAPI.routes(router)
+	}
 
 	static, err := fs.Sub(webassets.Assets, "static")
 	if err != nil {
@@ -81,39 +86,4 @@ func NewServer(repository posts.Repository, options ...ServerOptions) http.Handl
 	}
 	public.routes(router)
 	return router
-}
-
-func requestID(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := r.Header.Get("X-Request-ID")
-		if id == "" {
-			id = uuid.NewString()
-		}
-		w.Header().Set("X-Request-ID", id)
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), requestIDKey, id)))
-	})
-}
-
-func recoverPanics(logger *slog.Logger) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			defer func() {
-				if recovered := recover(); recovered != nil {
-					logger.Error("panic while serving request", "request_id", r.Context().Value(requestIDKey), "panic", recovered, "stack", string(debug.Stack()))
-					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				}
-			}()
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-func accessLog(logger *slog.Logger) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			started := time.Now()
-			next.ServeHTTP(w, r)
-			logger.Info("http request", "request_id", r.Context().Value(requestIDKey), "method", r.Method, "path", r.URL.Path, "duration", time.Since(started))
-		})
-	}
 }
