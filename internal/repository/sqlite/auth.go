@@ -93,7 +93,7 @@ func (r *PostRepository) CreateSession(ctx context.Context, session auth.Session
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO sessions (token_hash, csrf_hash, admin_id, expires_at, last_seen_at, created_at)
 		VALUES (?, ?, ?, ?, ?, ?)`, session.TokenHash[:], session.CSRFHash[:], session.AdminID,
-		formatTime(session.ExpiresAt), formatTime(session.LastSeenAt), formatTime(session.CreatedAt))
+		session.ExpiresAt.UnixNano(), session.LastSeenAt.UnixNano(), session.CreatedAt.UnixNano())
 	if err != nil {
 		return fmt.Errorf("create session: %w", err)
 	}
@@ -114,7 +114,7 @@ func (r *PostRepository) FindSession(ctx context.Context, tokenHash [sha256.Size
 	}
 	var session auth.Session
 	var storedToken, storedCSRF []byte
-	var expiresAt, lastSeenAt, createdAt string
+	var expiresAt, lastSeenAt, createdAt int64
 	err = tx.QueryRowContext(ctx, `
 		SELECT s.token_hash, s.csrf_hash, s.admin_id, a.username, s.expires_at, s.last_seen_at, s.created_at
 		FROM sessions s JOIN admins a ON a.id = s.admin_id
@@ -134,18 +134,9 @@ func (r *PostRepository) FindSession(ctx context.Context, tokenHash [sha256.Size
 	}
 	copy(session.TokenHash[:], storedToken)
 	copy(session.CSRFHash[:], storedCSRF)
-	session.ExpiresAt, err = parseTime(expiresAt)
-	if err != nil {
-		return auth.Session{}, err
-	}
-	session.LastSeenAt, err = parseTime(lastSeenAt)
-	if err != nil {
-		return auth.Session{}, err
-	}
-	session.CreatedAt, err = parseTime(createdAt)
-	if err != nil {
-		return auth.Session{}, err
-	}
+	session.ExpiresAt = time.Unix(0, expiresAt).UTC()
+	session.LastSeenAt = time.Unix(0, lastSeenAt).UTC()
+	session.CreatedAt = time.Unix(0, createdAt).UTC()
 	if !session.Active(now) {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM sessions WHERE token_hash = ?", tokenHash[:]); err != nil {
 			return auth.Session{}, fmt.Errorf("delete expired session: %w", err)
@@ -155,7 +146,7 @@ func (r *PostRepository) FindSession(ctx context.Context, tokenHash [sha256.Size
 		}
 		return auth.Session{}, auth.ErrSessionNotFound
 	}
-	if _, err := tx.ExecContext(ctx, "UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?", formatTime(now), tokenHash[:]); err != nil {
+	if _, err := tx.ExecContext(ctx, "UPDATE sessions SET last_seen_at = ? WHERE token_hash = ?", now.UnixNano(), tokenHash[:]); err != nil {
 		return auth.Session{}, fmt.Errorf("update session last seen: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -170,7 +161,7 @@ type contextExecer interface {
 }
 
 func pruneExpiredSessions(ctx context.Context, execer contextExecer, now time.Time) error {
-	if _, err := execer.ExecContext(ctx, "DELETE FROM sessions WHERE expires_at <= ?", formatTime(now)); err != nil {
+	if _, err := execer.ExecContext(ctx, "DELETE FROM sessions WHERE expires_at <= ?", now.UnixNano()); err != nil {
 		return fmt.Errorf("prune expired sessions: %w", err)
 	}
 	return nil

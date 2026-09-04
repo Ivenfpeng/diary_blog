@@ -196,6 +196,48 @@ func TestSessionRepositorySurfacesExpiredPruneFailure(t *testing.T) {
 	}
 }
 
+func TestSessionRepositoryOrdersFractionalExpiryNumerically(t *testing.T) {
+	ctx := context.Background()
+	repo, db := newAuthRepository(t)
+	base := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
+	admin, err := repo.UpsertAdmin(ctx, "admin", "hash", base.Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expired, _, err := auth.NewSession(admin.ID, base.Add(-13*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expired.ExpiresAt = base.Add(100 * time.Millisecond)
+	future, _, err := auth.NewSession(admin.ID, base.Add(-13*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	future.ExpiresAt = base.Add(120 * time.Millisecond)
+	if err := repo.CreateSession(ctx, expired); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.CreateSession(ctx, future); err != nil {
+		t.Fatal(err)
+	}
+
+	lookupAt := base.Add(110 * time.Millisecond)
+	loaded, err := repo.FindSession(ctx, future.TokenHash, lookupAt)
+	if err != nil {
+		t.Fatalf("future fractional session lookup: %v", err)
+	}
+	if !loaded.ExpiresAt.Equal(future.ExpiresAt) {
+		t.Fatalf("loaded expiry = %v, want %v", loaded.ExpiresAt, future.ExpiresAt)
+	}
+	var expiredCount int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sessions WHERE token_hash = ?", expired.TokenHash[:]).Scan(&expiredCount); err != nil {
+		t.Fatal(err)
+	}
+	if expiredCount != 0 {
+		t.Fatal("numerically expired .1 session was not pruned before .12 session lookup")
+	}
+}
+
 func newAuthRepository(t *testing.T) (*sqliterepo.PostRepository, *sql.DB) {
 	t.Helper()
 	ctx := context.Background()

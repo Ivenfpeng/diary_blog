@@ -26,12 +26,13 @@ type ServerOptions struct {
 	Auth           AuthOptions
 }
 
-// AuthOptions bounds authentication work and configures trusted network peers.
+// AuthOptions bounds authentication work and throttle state, and configures trusted network peers.
 // Forwarded client addresses are ignored unless their immediate peer matches a
 // configured trusted proxy CIDR.
 type AuthOptions struct {
 	Repository            auth.Repository
 	MaxConcurrentAuthWork int
+	MaxThrottleEntries    int
 	TrustedProxyCIDRs     []string
 }
 

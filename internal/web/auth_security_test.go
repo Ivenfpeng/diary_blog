@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -61,6 +62,12 @@ func TestLoginGlobalWorkSaturationFailsIdenticallyBeforeAccountLookup(t *testing
 	if calls := repository.lookups.Load(); calls != 0 {
 		t.Fatalf("repository lookups under saturation = %d, want 0", calls)
 	}
+	handler.throttle.mu.Lock()
+	remaining := len(handler.throttle.entries)
+	handler.throttle.mu.Unlock()
+	if remaining != 0 {
+		t.Fatalf("neutral saturation retained %d empty throttle entries", remaining)
+	}
 }
 
 func TestClientIPTrustsForwardingOnlyFromConfiguredImmediateProxy(t *testing.T) {
@@ -96,5 +103,87 @@ func TestAuthOptionsRejectInvalidTrustedProxyCIDR(t *testing.T) {
 	}
 	if _, err := newAuthHandler(&saturatedAuthRepository{}, origin, time.Now, AuthOptions{TrustedProxyCIDRs: []string{"not-a-cidr"}}); err == nil {
 		t.Fatal("expected invalid trusted proxy CIDR to be rejected")
+	}
+}
+
+func TestLoginRejectsOversizedUsernameBeforeAuthenticationWork(t *testing.T) {
+	repository := &saturatedAuthRepository{}
+	origin, err := url.Parse("https://diary.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := newAuthHandler(repository, origin, time.Now, AuthOptions{MaxConcurrentAuthWork: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, username := range map[string]string{
+		"byte limit": strings.Repeat("a", maxUsernameBytes+1),
+		"rune limit": strings.Repeat("界", maxUsernameRunes+1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBufferString(`{"username":"`+username+`","password":"wrong"}`))
+			response := httptest.NewRecorder()
+			handler.login(response, request)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400", response.Code)
+			}
+		})
+	}
+	if calls := repository.lookups.Load(); calls != 0 {
+		t.Fatalf("repository lookups for oversized usernames = %d, want 0", calls)
+	}
+}
+
+func TestLoginThrottleStopsRotatingNamesByIPAndRecoversAfterWindow(t *testing.T) {
+	throttle := newLoginThrottle(64)
+	now := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
+	ip := "203.0.113.44"
+	for attempt := 0; attempt < loginIPFailureLimit; attempt++ {
+		username := "rotated-" + string(rune('a'+attempt))
+		if !throttle.begin(username, ip, now) {
+			t.Fatalf("rotating attempt %d was rejected before IP limit", attempt+1)
+		}
+		throttle.complete(username, ip, now, throttleFailure)
+	}
+	if throttle.begin("another-name", ip, now) {
+		t.Fatal("rotating username bypassed IP-only admission limit")
+	}
+
+	recoveredAt := now.Add(loginWindow + time.Nanosecond)
+	if !throttle.begin("admin", ip, recoveredAt) {
+		t.Fatal("legitimate login did not recover after throttle TTL")
+	}
+	throttle.complete("admin", ip, recoveredAt, throttleSuccess)
+	throttle.mu.Lock()
+	remaining := len(throttle.entries)
+	throttle.mu.Unlock()
+	if remaining != 0 {
+		t.Fatalf("throttle retained %d empty/expired entries after recovery", remaining)
+	}
+}
+
+func TestLoginThrottleStateIsGloballyCappedWithCrossKeyEviction(t *testing.T) {
+	const capacity = 4
+	throttle := newLoginThrottle(capacity)
+	now := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
+	for attempt := 0; attempt < 10; attempt++ {
+		username := "user-" + string(rune('a'+attempt))
+		ip := "203.0.113." + string(rune('1'+attempt))
+		if !throttle.begin(username, ip, now.Add(time.Duration(attempt)*time.Second)) {
+			t.Fatalf("attempt %d unexpectedly rejected", attempt+1)
+		}
+		throttle.complete(username, ip, now.Add(time.Duration(attempt)*time.Second), throttleFailure)
+		throttle.mu.Lock()
+		count := len(throttle.entries)
+		throttle.mu.Unlock()
+		if count > capacity {
+			t.Fatalf("throttle entry count = %d, exceeds cap %d", count, capacity)
+		}
+	}
+	throttle.mu.Lock()
+	_, retainedOldest := throttle.entries[usernameIPThrottleKey("user-a", "203.0.113.1")]
+	throttle.mu.Unlock()
+	if retainedOldest {
+		t.Fatal("least-recently-used throttle key was not evicted")
 	}
 }
