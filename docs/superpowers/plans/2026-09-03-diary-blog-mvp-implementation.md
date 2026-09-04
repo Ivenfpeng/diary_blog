@@ -871,17 +871,17 @@ git commit -m "feat: publish and search articles"
 - Create: `internal/web/public.go`
 - Create: `internal/web/http_test.go`
 
-- [ ] **Step 1: Write failing public route tests**
+- [x] **Step 1: Write failing public route tests**
 
 Use `httptest.NewServer`. Assert `/`, `/posts/{slug}`, `/categories/{slug}`, `/tags/{slug}`, and `/archive` return full HTML. The article assertion must include canonical URL, title, sanitized body, reading time, and table-of-contents heading link.
 
-- [ ] **Step 2: Run the route tests and confirm failure**
+- [x] **Step 2: Run the route tests and confirm failure**
 
 Run: `go test ./internal/web -run 'TestPublic' -v`
 
 Expected: FAIL because server construction is missing.
 
-- [ ] **Step 3: Embed assets and assemble chi routes**
+- [x] **Step 3: Embed assets and assemble chi routes**
 
 Create `web/assets.go`:
 
@@ -896,13 +896,13 @@ var Assets embed.FS
 
 Create `NewServer` that registers request ID, panic recovery, access logging, static assets, media, public routes, `/healthz`, and `/readyz`.
 
-- [ ] **Step 4: Build the approved public layout**
+- [x] **Step 4: Build the approved public layout**
 
 Templates must implement the approved knowledge-base structure: stable header, desktop taxonomy sidebar, dense article rows, mobile taxonomy menu, article metadata, readable prose width, code blocks, and sticky desktop table of contents.
 
 `site.css` must define reusable tokens for forest, neutral, gold, blue, red, spacing, focus rings, content width, breakpoints, icon-button dimensions, and reduced-motion behavior. Cards must not wrap page sections.
 
-- [ ] **Step 5: Verify public behavior and visual constraints**
+- [x] **Step 5: Verify public behavior and visual constraints**
 
 Run:
 
@@ -913,7 +913,7 @@ go test ./...
 
 Expected: PASS; HTML tests find no draft content.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add web internal/web

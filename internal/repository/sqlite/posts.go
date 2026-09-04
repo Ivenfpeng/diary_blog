@@ -232,6 +232,9 @@ func (r *PostRepository) Publish(ctx context.Context, id int64, rendered content
 		VALUES (?, ?, ?, ?)`, id, current.Title, current.Summary, rendered.PlainText); err != nil {
 		return content.Post{}, fmt.Errorf("index published post: %w", err)
 	}
+	if err := replacePublishedSnapshot(ctx, tx, current, rendered, now); err != nil {
+		return content.Post{}, err
+	}
 	if err := trimRevisions(ctx, tx, id); err != nil {
 		return content.Post{}, err
 	}
@@ -273,6 +276,9 @@ func (r *PostRepository) Archive(ctx context.Context, id, expectedRevision int64
 	if _, err := tx.ExecContext(ctx, "DELETE FROM posts_fts WHERE post_id = ?", id); err != nil {
 		return content.Post{}, fmt.Errorf("remove archived post from search: %w", err)
 	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM published_posts WHERE post_id = ?", id); err != nil {
+		return content.Post{}, fmt.Errorf("remove published snapshot: %w", err)
+	}
 	if err := trimRevisions(ctx, tx, id); err != nil {
 		return content.Post{}, err
 	}
@@ -286,37 +292,37 @@ func (r *PostRepository) Archive(ctx context.Context, id, expectedRevision int64
 	return archived, nil
 }
 
-func (r *PostRepository) GetPublishedBySlug(ctx context.Context, slug string) (content.Post, error) {
+func (r *PostRepository) GetPublishedBySlug(ctx context.Context, slug string) (posts.PublishedPost, error) {
 	var id int64
-	err := r.db.QueryRowContext(ctx, "SELECT id FROM posts WHERE slug = ? AND status = ?", slug, content.StatusPublished).Scan(&id)
+	err := r.db.QueryRowContext(ctx, "SELECT post_id FROM published_posts WHERE slug = ?", slug).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
-		return content.Post{}, posts.ErrNotFound
+		return posts.PublishedPost{}, posts.ErrNotFound
 	}
 	if err != nil {
-		return content.Post{}, fmt.Errorf("find published post: %w", err)
+		return posts.PublishedPost{}, fmt.Errorf("find published post: %w", err)
 	}
-	return getPost(ctx, r.db, id)
+	return getPublishedPost(ctx, r.db, id)
 }
 
-func (r *PostRepository) ListPublished(ctx context.Context, filter posts.PublishedFilter) ([]content.Post, int, error) {
-	where := []string{"p.status = ?"}
-	args := []any{content.StatusPublished}
+func (r *PostRepository) ListPublished(ctx context.Context, filter posts.PublishedFilter) ([]posts.PublishedPost, int, error) {
+	where := []string{"1 = 1"}
+	args := make([]any, 0, 3)
 	if filter.CategorySlug != "" {
-		where = append(where, "EXISTS (SELECT 1 FROM categories c WHERE c.id = p.category_id AND c.slug = ?)")
+		where = append(where, "EXISTS (SELECT 1 FROM published_post_categories c WHERE c.post_id = pp.post_id AND c.slug = ?)")
 		args = append(args, filter.CategorySlug)
 	}
 	if filter.TagSlug != "" {
-		where = append(where, "EXISTS (SELECT 1 FROM post_tags pt JOIN tags t ON t.id = pt.tag_id WHERE pt.post_id = p.id AND t.slug = ?)")
+		where = append(where, "EXISTS (SELECT 1 FROM published_post_tags pt WHERE pt.post_id = pp.post_id AND pt.slug = ?)")
 		args = append(args, filter.TagSlug)
 	}
 	if filter.Year != 0 {
-		where = append(where, "CAST(strftime('%Y', p.published_at) AS INTEGER) = ?")
+		where = append(where, "CAST(strftime('%Y', pp.published_at) AS INTEGER) = ?")
 		args = append(args, filter.Year)
 	}
-	return r.listPostIDs(ctx, strings.Join(where, " AND "), args, filter.Page, filter.PageSize, "p.published_at DESC, p.id DESC")
+	return r.listPublishedPostIDs(ctx, strings.Join(where, " AND "), args, filter.Page, filter.PageSize, "pp.published_at DESC, pp.post_id DESC")
 }
 
-func (r *PostRepository) SearchPublished(ctx context.Context, query string, page, pageSize int) ([]content.Post, int, error) {
+func (r *PostRepository) SearchPublished(ctx context.Context, query string, page, pageSize int) ([]posts.PublishedPost, int, error) {
 	match, err := searchExpression(query)
 	if err != nil {
 		return nil, 0, err
@@ -326,15 +332,15 @@ func (r *PostRepository) SearchPublished(ctx context.Context, query string, page
 	}
 	var total int
 	if err := r.db.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM posts_fts f JOIN posts p ON p.id = f.post_id
-		WHERE posts_fts MATCH ? AND p.status = ?`, match, content.StatusPublished).Scan(&total); err != nil {
+		SELECT COUNT(*) FROM posts_fts f JOIN published_posts pp ON pp.post_id = f.post_id
+		WHERE posts_fts MATCH ?`, match).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count search results: %w", err)
 	}
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT p.id FROM posts_fts f JOIN posts p ON p.id = f.post_id
-		WHERE posts_fts MATCH ? AND p.status = ?
-		ORDER BY bm25(posts_fts), p.id DESC LIMIT ? OFFSET ?`,
-		match, content.StatusPublished, pageSize, (page-1)*pageSize)
+		SELECT pp.post_id FROM posts_fts f JOIN published_posts pp ON pp.post_id = f.post_id
+		WHERE posts_fts MATCH ?
+		ORDER BY bm25(posts_fts), pp.post_id DESC LIMIT ? OFFSET ?`,
+		match, pageSize, (page-1)*pageSize)
 	if err != nil {
 		return nil, 0, fmt.Errorf("search published posts: %w", err)
 	}
@@ -342,8 +348,20 @@ func (r *PostRepository) SearchPublished(ctx context.Context, query string, page
 	if err != nil {
 		return nil, 0, err
 	}
-	result, err := r.loadPosts(ctx, ids)
+	result, err := r.loadPublishedPosts(ctx, ids)
 	return result, total, err
+}
+
+func (r *PostRepository) ListPublishedTaxonomy(ctx context.Context) (posts.PublishedTaxonomy, error) {
+	categories, err := listPublishedTaxonomy(ctx, r.db, "published_post_categories")
+	if err != nil {
+		return posts.PublishedTaxonomy{}, err
+	}
+	tags, err := listPublishedTaxonomy(ctx, r.db, "published_post_tags")
+	if err != nil {
+		return posts.PublishedTaxonomy{}, err
+	}
+	return posts.PublishedTaxonomy{Categories: categories, Tags: tags}, nil
 }
 
 func (r *PostRepository) RebuildSearch(ctx context.Context) error {
@@ -357,7 +375,7 @@ func (r *PostRepository) RebuildSearch(ctx context.Context) error {
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO posts_fts (post_id, title, summary, content_plain)
-		SELECT id, title, summary, content_plain FROM posts WHERE status = ?`, content.StatusPublished); err != nil {
+		SELECT post_id, title, summary, content_plain FROM published_posts`); err != nil {
 		return fmt.Errorf("rebuild search index: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -422,6 +440,39 @@ func (r *PostRepository) loadPosts(ctx context.Context, ids []int64) ([]content.
 	result := make([]content.Post, 0, len(ids))
 	for _, id := range ids {
 		post, err := getPost(ctx, r.db, id)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, post)
+	}
+	return result, nil
+}
+
+func (r *PostRepository) listPublishedPostIDs(ctx context.Context, where string, args []any, page, pageSize int, order string) ([]posts.PublishedPost, int, error) {
+	if page < 1 || pageSize < 1 || pageSize > 100 {
+		return nil, 0, fmt.Errorf("%w: invalid pagination", posts.ErrValidation)
+	}
+	var total int
+	if err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM published_posts pp WHERE "+where, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count published posts: %w", err)
+	}
+	queryArgs := append(append([]any{}, args...), pageSize, (page-1)*pageSize)
+	rows, err := r.db.QueryContext(ctx, "SELECT pp.post_id FROM published_posts pp WHERE "+where+" ORDER BY "+order+" LIMIT ? OFFSET ?", queryArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list published posts: %w", err)
+	}
+	ids, err := collectIDs(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	result, err := r.loadPublishedPosts(ctx, ids)
+	return result, total, err
+}
+
+func (r *PostRepository) loadPublishedPosts(ctx context.Context, ids []int64) ([]posts.PublishedPost, error) {
+	result := make([]posts.PublishedPost, 0, len(ids))
+	for _, id := range ids {
+		post, err := getPublishedPost(ctx, r.db, id)
 		if err != nil {
 			return nil, err
 		}
@@ -495,6 +546,88 @@ func getPost(ctx context.Context, q queryer, id int64) (content.Post, error) {
 		return content.Post{}, err
 	}
 	return post, nil
+}
+
+func getPublishedPost(ctx context.Context, q queryer, id int64) (posts.PublishedPost, error) {
+	var post posts.PublishedPost
+	var publishedAt string
+	err := q.QueryRowContext(ctx, `
+		SELECT post_id, slug, title, summary, content_md, content_html, content_plain, published_at
+		FROM published_posts WHERE post_id = ?`, id).Scan(
+		&post.ID, &post.Slug, &post.Title, &post.Summary, &post.ContentMD, &post.ContentHTML,
+		&post.ContentPlain, &publishedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return posts.PublishedPost{}, posts.ErrNotFound
+	}
+	if err != nil {
+		return posts.PublishedPost{}, fmt.Errorf("get published post: %w", err)
+	}
+	post.PublishedAt, err = parseTime(publishedAt)
+	if err != nil {
+		return posts.PublishedPost{}, err
+	}
+	post.Category, err = getPublishedCategory(ctx, q, id)
+	if err != nil {
+		return posts.PublishedPost{}, err
+	}
+	post.Tags, err = getPublishedTags(ctx, q, id)
+	if err != nil {
+		return posts.PublishedPost{}, err
+	}
+	return post, nil
+}
+
+func getPublishedCategory(ctx context.Context, q queryer, postID int64) (*posts.Taxonomy, error) {
+	var category posts.Taxonomy
+	err := q.QueryRowContext(ctx, "SELECT slug, name FROM published_post_categories WHERE post_id = ?", postID).Scan(&category.Slug, &category.Name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get published category: %w", err)
+	}
+	return &category, nil
+}
+
+func getPublishedTags(ctx context.Context, q queryer, postID int64) ([]posts.Taxonomy, error) {
+	rows, err := q.QueryContext(ctx, "SELECT slug, name FROM published_post_tags WHERE post_id = ? ORDER BY name, slug", postID)
+	if err != nil {
+		return nil, fmt.Errorf("list published tags: %w", err)
+	}
+	defer rows.Close()
+	tags := make([]posts.Taxonomy, 0)
+	for rows.Next() {
+		var tag posts.Taxonomy
+		if err := rows.Scan(&tag.Slug, &tag.Name); err != nil {
+			return nil, fmt.Errorf("scan published tag: %w", err)
+		}
+		tags = append(tags, tag)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate published tags: %w", err)
+	}
+	return tags, nil
+}
+
+func listPublishedTaxonomy(ctx context.Context, q queryer, table string) ([]posts.Taxonomy, error) {
+	rows, err := q.QueryContext(ctx, "SELECT DISTINCT slug, name FROM "+table+" ORDER BY name, slug")
+	if err != nil {
+		return nil, fmt.Errorf("list published taxonomy: %w", err)
+	}
+	defer rows.Close()
+	taxonomy := make([]posts.Taxonomy, 0)
+	for rows.Next() {
+		var item posts.Taxonomy
+		if err := rows.Scan(&item.Slug, &item.Name); err != nil {
+			return nil, fmt.Errorf("scan published taxonomy: %w", err)
+		}
+		taxonomy = append(taxonomy, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate published taxonomy: %w", err)
+	}
+	return taxonomy, nil
 }
 
 func getTagIDs(ctx context.Context, q queryer, postID int64) ([]int64, error) {
@@ -574,6 +707,53 @@ func replaceTags(ctx context.Context, tx *sql.Tx, postID int64, tagIDs []int64) 
 			"INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)", postID, tagID,
 		); err != nil {
 			return fmt.Errorf("insert post tag: %w", err)
+		}
+	}
+	return nil
+}
+
+func replacePublishedSnapshot(ctx context.Context, tx *sql.Tx, post content.Post, rendered content.RenderedContent, now time.Time) error {
+	publishedAt := now
+	if post.PublishedAt != nil {
+		publishedAt = *post.PublishedAt
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO published_posts (post_id, slug, title, summary, content_md, content_html, content_plain, published_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(post_id) DO UPDATE SET
+			slug = excluded.slug, title = excluded.title, summary = excluded.summary,
+			content_md = excluded.content_md, content_html = excluded.content_html, content_plain = excluded.content_plain,
+			published_at = excluded.published_at`,
+		post.ID, post.Slug, post.Title, post.Summary, post.ContentMD, rendered.HTML, rendered.PlainText, formatTime(publishedAt),
+	); err != nil {
+		return fmt.Errorf("upsert published snapshot: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM published_post_categories WHERE post_id = ?", post.ID); err != nil {
+		return fmt.Errorf("clear published category: %w", err)
+	}
+	if post.CategoryID != nil {
+		result, err := tx.ExecContext(ctx, `
+			INSERT INTO published_post_categories (post_id, slug, name)
+			SELECT ?, slug, name FROM categories WHERE id = ?`, post.ID, *post.CategoryID)
+		if err != nil {
+			return fmt.Errorf("snapshot published category: %w", err)
+		}
+		if err := requireUpdated(result); err != nil {
+			return fmt.Errorf("snapshot published category: %w", err)
+		}
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM published_post_tags WHERE post_id = ?", post.ID); err != nil {
+		return fmt.Errorf("clear published tags: %w", err)
+	}
+	for _, tagID := range post.TagIDs {
+		result, err := tx.ExecContext(ctx, `
+			INSERT INTO published_post_tags (post_id, slug, name)
+			SELECT ?, slug, name FROM tags WHERE id = ?`, post.ID, tagID)
+		if err != nil {
+			return fmt.Errorf("snapshot published tag: %w", err)
+		}
+		if err := requireUpdated(result); err != nil {
+			return fmt.Errorf("snapshot published tag: %w", err)
 		}
 	}
 	return nil

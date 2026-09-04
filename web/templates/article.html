@@ -4,11 +4,12 @@
     <p class="eyebrow">Article</p>
     <h1>{{.Post.Title}}</h1>
     {{if .Post.Summary}}<p class="article-summary">{{.Post.Summary}}</p>{{end}}
-    <div class="article-meta"><time datetime="{{formatTime .Post.PublishedAt}}">{{formatDate .Post.PublishedAt}}</time><span aria-hidden="true">·</span><span>{{.ReadingMinutes}} min read</span></div>
+    <div class="article-meta"><time datetime="{{formatTime .Post.PublishedAt}}">{{formatDate .Post.PublishedAt}}</time><span aria-hidden="true">·</span><span>{{.ReadingMinutes}} min read</span>{{with .Post.Category}}<span aria-hidden="true">·</span><a href="/categories/{{.Slug}}">{{.Name}}</a>{{end}}{{range .Post.Tags}}<span aria-hidden="true">·</span><a href="/tags/{{.Slug}}">{{.Name}}</a>{{end}}</div>
   </header>
   <div class="article-reading-grid">
     <div class="prose">{{.Body}}</div>
-    {{if .Headings}}<aside class="table-of-contents" aria-label="On this page"><p class="eyebrow">On this page</p><ol>{{range .Headings}}<li class="toc-level-{{.Level}}"><a href="#{{.ID}}">{{.Text}}</a></li>{{end}}</ol></aside>{{end}}
+    {{if .Headings}}<aside class="desktop-table-of-contents" aria-label="On this page"><p class="eyebrow">On this page</p><ol>{{range .Headings}}<li class="toc-level-{{.Level}}"><a href="#{{.ID}}">{{.Text}}</a></li>{{end}}</ol></aside>{{end}}
   </div>
+  {{if .Headings}}<details class="mobile-table-of-contents"><summary>On this page</summary><ol>{{range .Headings}}<li class="toc-level-{{.Level}}"><a href="#{{.ID}}">{{.Text}}</a></li>{{end}}</ol></details>{{end}}
 </article>
 {{end}}

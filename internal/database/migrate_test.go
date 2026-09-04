@@ -32,6 +32,9 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 		"post_revisions",
 		"site_settings",
 		"posts_fts",
+		"published_posts",
+		"published_post_categories",
+		"published_post_tags",
 		"schema_migrations",
 	}
 	for _, table := range requiredTables {
@@ -51,8 +54,8 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
 		t.Fatal(err)
 	}
-	if migrationCount != 2 {
-		t.Fatalf("migration count = %d, want 2", migrationCount)
+	if migrationCount != 3 {
+		t.Fatalf("migration count = %d, want 3", migrationCount)
 	}
 }
 

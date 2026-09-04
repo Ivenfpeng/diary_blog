@@ -28,11 +28,13 @@ type pageData struct {
 	Heading         string
 	Description     string
 	CanonicalURL    string
-	Posts           []content.Post
-	Post            content.Post
+	Posts           []posts.PublishedPost
+	Post            posts.PublishedPost
 	Body            template.HTML
 	Headings        []content.Heading
 	ReadingMinutes  int
+	Categories      []posts.Taxonomy
+	Tags            []posts.Taxonomy
 	CurrentCategory string
 	CurrentTag      string
 	Status          int
@@ -40,16 +42,10 @@ type pageData struct {
 
 func newPublicHandler(repository posts.Repository) (*publicHandler, error) {
 	base, err := template.New("base.html").Funcs(template.FuncMap{
-		"formatDate": func(value *time.Time) string {
-			if value == nil {
-				return "Unpublished"
-			}
+		"formatDate": func(value time.Time) string {
 			return value.Format("02 Jan 2006")
 		},
-		"formatTime": func(value *time.Time) string {
-			if value == nil {
-				return ""
-			}
+		"formatTime": func(value time.Time) string {
 			return value.Format(time.RFC3339)
 		},
 	}).ParseFS(webassets.Assets, "templates/base.html")
@@ -91,7 +87,14 @@ func (h *publicHandler) renderListing(w http.ResponseWriter, r *http.Request, te
 		h.error(w, r, http.StatusInternalServerError, "We could not load these articles.")
 		return
 	}
+	taxonomy, err := h.repository.ListPublishedTaxonomy(r.Context())
+	if err != nil {
+		h.error(w, r, http.StatusInternalServerError, "We could not load the site navigation.")
+		return
+	}
 	data.Posts = items
+	data.Categories = taxonomy.Categories
+	data.Tags = taxonomy.Tags
 	data.CanonicalURL = canonicalURL(r)
 	h.render(w, http.StatusOK, templateName, data)
 }
@@ -111,9 +114,15 @@ func (h *publicHandler) article(w http.ResponseWriter, r *http.Request) {
 		h.error(w, r, http.StatusInternalServerError, "We could not prepare this article.")
 		return
 	}
+	taxonomy, err := h.repository.ListPublishedTaxonomy(r.Context())
+	if err != nil {
+		h.error(w, r, http.StatusInternalServerError, "We could not load the site navigation.")
+		return
+	}
 	h.render(w, http.StatusOK, "article.html", pageData{
 		Title: post.Title, Description: post.Summary, CanonicalURL: canonicalURL(r), Post: post,
 		Body: template.HTML(post.ContentHTML), Headings: rendered.Headings, ReadingMinutes: rendered.ReadingMinutes,
+		Categories: taxonomy.Categories, Tags: taxonomy.Tags,
 	})
 }
 
@@ -148,7 +157,9 @@ func (h *publicHandler) render(w http.ResponseWriter, status int, pageTemplate s
 
 func canonicalURL(r *http.Request) string {
 	scheme := "http"
-	if forwarded := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0]); forwarded == "https" || forwarded == "http" {
+	if r.TLS != nil {
+		scheme = "https"
+	} else if forwarded := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0]); forwarded == "https" || forwarded == "http" {
 		scheme = forwarded
 	}
 	return (&url.URL{Scheme: scheme, Host: r.Host, Path: r.URL.Path}).String()

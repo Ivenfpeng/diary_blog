@@ -20,6 +20,33 @@ type PublishedFilter struct {
 	PageSize     int
 }
 
+// Taxonomy is the immutable display taxonomy captured with a successful
+// publication.
+type Taxonomy struct {
+	Slug string
+	Name string
+}
+
+// PublishedPost contains only the immutable fields visible on the public
+// site. Draft fields deliberately cannot leak through this view.
+type PublishedPost struct {
+	ID           int64
+	Slug         string
+	Title        string
+	Summary      string
+	ContentMD    string
+	ContentHTML  string
+	ContentPlain string
+	PublishedAt  time.Time
+	Category     *Taxonomy
+	Tags         []Taxonomy
+}
+
+type PublishedTaxonomy struct {
+	Categories []Taxonomy
+	Tags       []Taxonomy
+}
+
 type AdminFilter struct {
 	Status   content.PostStatus
 	Query    string
@@ -35,9 +62,10 @@ type Repository interface {
 	RestoreRevision(context.Context, int64, int64, int64, time.Time) (content.Post, error)
 	Publish(context.Context, int64, content.RenderedContent, int64, time.Time) (content.Post, error)
 	Archive(context.Context, int64, int64, time.Time) (content.Post, error)
-	GetPublishedBySlug(context.Context, string) (content.Post, error)
-	ListPublished(context.Context, PublishedFilter) ([]content.Post, int, error)
-	SearchPublished(context.Context, string, int, int) ([]content.Post, int, error)
+	GetPublishedBySlug(context.Context, string) (PublishedPost, error)
+	ListPublished(context.Context, PublishedFilter) ([]PublishedPost, int, error)
+	SearchPublished(context.Context, string, int, int) ([]PublishedPost, int, error)
+	ListPublishedTaxonomy(context.Context) (PublishedTaxonomy, error)
 	RebuildSearch(context.Context) error
 	ListAdmin(context.Context, AdminFilter) ([]content.Post, int, error)
 }
