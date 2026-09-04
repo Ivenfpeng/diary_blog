@@ -13,7 +13,7 @@ const closeNavigation = () => { navigationOpen.value = false }
     <aside class="admin-nav" aria-label="Administration navigation">
       <div class="brand">Diary Blog</div>
       <nav>
-        <RouterLink to="/admin" class="nav-link" @click="closeNavigation">
+        <RouterLink :to="{ name: 'dashboard' }" class="nav-link" @click="closeNavigation">
           <LayoutDashboard :size="18" aria-hidden="true" />
           Overview
         </RouterLink>

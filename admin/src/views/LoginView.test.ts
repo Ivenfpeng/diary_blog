@@ -33,7 +33,7 @@ describe('LoginView', () => {
       method: 'POST',
       body: { username: 'editor', password: 'correct-horse-battery-staple' },
     })
-    expect(push).toHaveBeenCalledWith('/admin')
+    expect(push).toHaveBeenCalledWith({ name: 'dashboard' })
   })
 
   it('retains the username and restores password focus when login fails', async () => {

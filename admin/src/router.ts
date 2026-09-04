@@ -7,22 +7,22 @@ import { restoreSession, session } from './state/session'
 const router = createRouter({
   history: createWebHistory('/admin/'),
   routes: [
-    { path: '/admin/login', name: 'login', component: LoginView, meta: { public: true } },
+    { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
     {
-      path: '/admin',
+      path: '/',
       component: AdminLayout,
       meta: { requiresAuth: true },
       children: [{ path: '', name: 'dashboard', component: DashboardView }],
     },
-    { path: '/:pathMatch(.*)*', redirect: '/admin' },
+    { path: '/:pathMatch(.*)*', redirect: { name: 'dashboard' } },
   ],
 })
 
 router.beforeEach(async (to) => {
   const authenticated = await restoreSession()
 
-  if (to.meta.requiresAuth && !authenticated) return '/admin/login'
-  if (to.meta.public && authenticated) return '/admin'
+  if (to.meta.requiresAuth && !authenticated) return { name: 'login' }
+  if (to.meta.public && authenticated) return { name: 'dashboard' }
   return true
 })
 

@@ -21,7 +21,7 @@ async function submit(): Promise<void> {
       body: { username: username.value, password: password.value },
     })
     setSession(response)
-    await router.push('/admin')
+    await router.push({ name: 'dashboard' })
   } catch (error) {
     password.value = ''
     errorMessage.value = error instanceof Error ? error.message : 'Unable to sign in.'
