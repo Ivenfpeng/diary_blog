@@ -14,8 +14,9 @@ import (
 const SessionLifetime = 12 * time.Hour
 
 var (
-	ErrAdminNotFound   = errors.New("administrator not found")
-	ErrSessionNotFound = errors.New("session not found")
+	ErrAdminNotFound      = errors.New("administrator not found")
+	ErrAdminAlreadyExists = errors.New("an administrator already exists")
+	ErrSessionNotFound    = errors.New("session not found")
 )
 
 type Admin struct {

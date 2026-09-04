@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -62,6 +63,136 @@ func TestSessionRepositoryStoresHashesExpiresAbsolutelyAndDeletesOnLogout(t *tes
 	}
 	if _, err := repo.FindSession(ctx, session.TokenHash, now); !errors.Is(err, auth.ErrSessionNotFound) {
 		t.Fatalf("deleted session error = %v, want ErrSessionNotFound", err)
+	}
+}
+
+func TestAdminRepositoryEnforcesSingleAdministratorTransactionally(t *testing.T) {
+	ctx := context.Background()
+	repo, db := newAuthRepository(t)
+	now := time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	admin, err := repo.UpsertAdmin(ctx, "Admin", "first-hash", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reset, err := repo.UpsertAdmin(ctx, " admin ", "second-hash", now.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reset.ID != admin.ID || reset.PasswordHash != "second-hash" {
+		t.Fatalf("password reset administrator = %+v, want id %d with updated hash", reset, admin.ID)
+	}
+	if _, err := repo.UpsertAdmin(ctx, "other", "other-hash", now); !errors.Is(err, auth.ErrAdminAlreadyExists) {
+		t.Fatalf("second identity error = %v, want ErrAdminAlreadyExists", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO admins (username, password_hash, created_at, updated_at)
+		VALUES ('direct-second', 'hash', '2026-09-04T10:00:00Z', '2026-09-04T10:00:00Z')`); err == nil {
+		t.Fatal("schema permitted a second administrator")
+	}
+}
+
+func TestAdminRepositoryConcurrentCreationAllowsOneIdentity(t *testing.T) {
+	ctx := context.Background()
+	repo, db := newAuthRepository(t)
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	var workers sync.WaitGroup
+	for _, username := range []string{"first", "second"} {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			_, err := repo.UpsertAdmin(ctx, username, "hash", time.Now())
+			results <- err
+		}()
+	}
+	close(start)
+	workers.Wait()
+	close(results)
+
+	var succeeded, rejected int
+	for err := range results {
+		switch {
+		case err == nil:
+			succeeded++
+		case errors.Is(err, auth.ErrAdminAlreadyExists):
+			rejected++
+		default:
+			t.Fatalf("unexpected concurrent creation error: %v", err)
+		}
+	}
+	if succeeded != 1 || rejected != 1 {
+		t.Fatalf("concurrent results succeeded=%d rejected=%d, want 1 and 1", succeeded, rejected)
+	}
+	var count int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM admins").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("administrator count = %d, want 1", count)
+	}
+}
+
+func TestSessionRepositoryPrunesExpiredRowsDuringCreation(t *testing.T) {
+	ctx := context.Background()
+	repo, db := newAuthRepository(t)
+	now := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
+	admin, err := repo.UpsertAdmin(ctx, "admin", "hash", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expired, _, err := auth.NewSession(admin.ID, now.Add(-13*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.CreateSession(ctx, expired); err != nil {
+		t.Fatal(err)
+	}
+	active, _, err := auth.NewSession(admin.ID, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.CreateSession(ctx, active); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sessions").Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("session count after bounded prune = %d, want 1", count)
+	}
+}
+
+func TestSessionRepositorySurfacesExpiredPruneFailure(t *testing.T) {
+	ctx := context.Background()
+	repo, db := newAuthRepository(t)
+	now := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
+	admin, err := repo.UpsertAdmin(ctx, "admin", "hash", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	active, _, err := auth.NewSession(admin.ID, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.CreateSession(ctx, active); err != nil {
+		t.Fatal(err)
+	}
+	expired, _, err := auth.NewSession(admin.ID, now.Add(-13*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.CreateSession(ctx, expired); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		CREATE TRIGGER reject_expired_session_cleanup BEFORE DELETE ON sessions
+		BEGIN SELECT RAISE(ABORT, 'cleanup rejected'); END`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.FindSession(ctx, active.TokenHash, now); err == nil {
+		t.Fatal("expected expired-session cleanup failure to be returned")
 	}
 }
 

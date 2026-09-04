@@ -972,27 +972,27 @@ git commit -m "feat: add search feeds and SEO metadata"
 - Modify: `internal/web/middleware.go`
 - Modify: `internal/web/server.go`
 
-- [ ] **Step 1: Add Argon2 and write failing auth tests**
+- [x] **Step 1: Add Argon2 and write failing auth tests**
 
 Run: `go get golang.org/x/crypto/argon2`
 
 Tests must verify correct and incorrect passwords, malformed hashes, 12-hour absolute session expiry, token hashing, logout deletion, Secure/HttpOnly/SameSite cookies, CSRF rejection, and login throttling after five failures in fifteen minutes.
 
-- [ ] **Step 2: Run tests and confirm failure**
+- [x] **Step 2: Run tests and confirm failure**
 
 Run: `go test ./internal/auth ./internal/repository/sqlite ./internal/web -run 'TestPassword|TestSession|TestLogin|TestCSRF' -v`
 
 Expected: FAIL.
 
-- [ ] **Step 3: Implement password and session primitives**
+- [x] **Step 3: Implement password and session primitives**
 
 Use Argon2id with a random 16-byte salt, 64 MiB memory, three iterations, two threads, and a 32-byte key. Encode the parameters with the hash, reject values above those configured bounds during parsing, and compare in constant time. Generate independent 32-byte random session and CSRF tokens, send base64url values to the client, and store only SHA-256 token hashes in SQLite.
 
-- [ ] **Step 4: Implement HTTP auth protections**
+- [x] **Step 4: Implement HTTP auth protections**
 
 The login response sets the session cookie as `Secure`, `HttpOnly`, and `SameSite=Strict`; it sets the CSRF cookie as `Secure` and `SameSite=Strict` but readable by the SPA. State-changing `/api/admin/*` requests must require the session, same-origin validation, matching CSRF header/cookie values, and a CSRF hash matching the active session row. Login throttling is in process and keyed by normalized username plus client IP.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `go test ./internal/auth ./internal/repository/sqlite ./internal/web -v`
 

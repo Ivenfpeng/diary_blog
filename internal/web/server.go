@@ -15,14 +15,24 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// ServerOptions configures filesystem resources that are intentionally kept
-// outside the executable image.
+// ServerOptions configures runtime dependencies, public URL handling, and
+// authentication boundaries.
 type ServerOptions struct {
 	MediaDir       string
 	Logger         *slog.Logger
 	PublicURL      string
 	Clock          func() time.Time
 	AuthRepository auth.Repository
+	Auth           AuthOptions
+}
+
+// AuthOptions bounds authentication work and configures trusted network peers.
+// Forwarded client addresses are ignored unless their immediate peer matches a
+// configured trusted proxy CIDR.
+type AuthOptions struct {
+	Repository            auth.Repository
+	MaxConcurrentAuthWork int
+	TrustedProxyCIDRs     []string
 }
 
 // NewServer builds the public HTTP surface. Options are optional so the
@@ -50,11 +60,15 @@ func NewServer(repository posts.Repository, options ...ServerOptions) http.Handl
 	router.Use(requestID, recoverPanics(config.Logger), accessLog(config.Logger))
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	router.Get("/readyz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	if config.AuthRepository == nil {
-		config.AuthRepository, _ = repository.(auth.Repository)
+	authRepository := config.Auth.Repository
+	if authRepository == nil {
+		authRepository = config.AuthRepository
 	}
-	if config.AuthRepository != nil {
-		authAPI, err := newAuthHandler(config.AuthRepository, public.publicBaseURL, config.Clock)
+	if authRepository == nil {
+		authRepository, _ = repository.(auth.Repository)
+	}
+	if authRepository != nil {
+		authAPI, err := newAuthHandler(authRepository, public.publicBaseURL, config.Clock, config.Auth)
 		if err != nil {
 			panic(fmt.Sprintf("initialize authentication: %v", err))
 		}

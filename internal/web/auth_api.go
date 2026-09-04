@@ -3,10 +3,12 @@ package web
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,15 +23,20 @@ const (
 	loginWindow       = 15 * time.Minute
 	loginFailureLimit = 5
 	loginBodyLimit    = 16 * 1024
+	defaultAuthWork   = 4
 )
 
 type authHandler struct {
-	repository auth.Repository
-	origin     *url.URL
-	clock      func() time.Time
-	dummyHash  string
-	throttle   *loginThrottle
+	repository     auth.Repository
+	origin         *url.URL
+	clock          func() time.Time
+	dummyHash      string
+	throttle       *loginThrottle
+	authWork       chan struct{}
+	trustedProxies trustedProxySet
 }
+
+type trustedProxySet []*net.IPNet
 
 type loginRequest struct {
 	Username string `json:"username"`
@@ -50,7 +57,18 @@ const (
 	throttleSuccess
 )
 
-func newAuthHandler(repository auth.Repository, origin *url.URL, clock func() time.Time) (*authHandler, error) {
+func newAuthHandler(repository auth.Repository, origin *url.URL, clock func() time.Time, options AuthOptions) (*authHandler, error) {
+	trustedProxies, err := parseTrustedProxyCIDRs(options.TrustedProxyCIDRs)
+	if err != nil {
+		return nil, err
+	}
+	maxAuthWork := options.MaxConcurrentAuthWork
+	if maxAuthWork < 0 {
+		return nil, errors.New("maximum concurrent authentication work cannot be negative")
+	}
+	if maxAuthWork == 0 {
+		maxAuthWork = defaultAuthWork
+	}
 	dummyHash, err := auth.HashPassword("invalid-administrator-password")
 	if err != nil {
 		return nil, err
@@ -58,6 +76,7 @@ func newAuthHandler(repository auth.Repository, origin *url.URL, clock func() ti
 	return &authHandler{
 		repository: repository, origin: origin, clock: clock, dummyHash: dummyHash,
 		throttle: &loginThrottle{failures: make(map[string][]time.Time), inFlight: make(map[string]int)},
+		authWork: make(chan struct{}, maxAuthWork), trustedProxies: trustedProxies,
 	}, nil
 }
 
@@ -81,7 +100,7 @@ func (h *authHandler) login(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, http.StatusBadRequest, "invalid_request", "A username and password are required.")
 		return
 	}
-	key := username + "\x00" + clientIP(r.RemoteAddr)
+	key := username + "\x00" + clientIP(r.RemoteAddr, r.Header.Get("X-Forwarded-For"), h.trustedProxies)
 	now := h.clock()
 	if !h.throttle.begin(key, now) {
 		writeAPIError(w, r, http.StatusTooManyRequests, "login_throttled", "Too many failed login attempts. Try again later.")
@@ -89,6 +108,12 @@ func (h *authHandler) login(w http.ResponseWriter, r *http.Request) {
 	}
 	outcome := throttleNeutral
 	defer func() { h.throttle.complete(key, h.clock(), outcome) }()
+	if !h.acquireAuthWork() {
+		w.Header().Set("Retry-After", "1")
+		writeAPIError(w, r, http.StatusServiceUnavailable, "authentication_busy", "Authentication is temporarily busy. Try again shortly.")
+		return
+	}
+	defer h.releaseAuthWork()
 
 	admin, err := h.repository.FindAdminByUsername(r.Context(), username)
 	if errors.Is(err, auth.ErrAdminNotFound) {
@@ -123,6 +148,19 @@ func (h *authHandler) login(w http.ResponseWriter, r *http.Request) {
 	outcome = throttleSuccess
 	setAuthCookies(w, credentials, session.ExpiresAt)
 	writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "username": admin.Username})
+}
+
+func (h *authHandler) acquireAuthWork() bool {
+	select {
+	case h.authWork <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (h *authHandler) releaseAuthWork() {
+	<-h.authWork
 }
 
 func (h *authHandler) currentSession(w http.ResponseWriter, r *http.Request) {
@@ -171,12 +209,59 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	_ = json.NewEncoder(w).Encode(value)
 }
 
-func clientIP(remoteAddr string) string {
+func clientIP(remoteAddr, forwardedFor string, trusted trustedProxySet) string {
 	host, _, err := net.SplitHostPort(remoteAddr)
-	if err == nil {
-		return host
+	if err != nil {
+		host = remoteAddr
 	}
-	return remoteAddr
+	peer := net.ParseIP(host)
+	if peer == nil {
+		return remoteAddr
+	}
+	if !trusted.contains(peer) || forwardedFor == "" {
+		return peer.String()
+	}
+	parts := strings.Split(forwardedFor, ",")
+	if len(parts) > 32 {
+		return peer.String()
+	}
+	chain := make([]net.IP, 0, len(parts))
+	for _, part := range parts {
+		address := net.ParseIP(strings.TrimSpace(part))
+		if address == nil {
+			return peer.String()
+		}
+		chain = append(chain, address)
+	}
+	candidate := peer
+	for index := len(chain) - 1; index >= 0; index-- {
+		candidate = chain[index]
+		if !trusted.contains(candidate) {
+			return candidate.String()
+		}
+	}
+	return candidate.String()
+}
+
+func parseTrustedProxyCIDRs(values []string) (trustedProxySet, error) {
+	trusted := make(trustedProxySet, 0, len(values))
+	for _, value := range values {
+		_, network, err := net.ParseCIDR(value)
+		if err != nil {
+			return nil, fmt.Errorf("parse trusted proxy CIDR: %w", err)
+		}
+		trusted = append(trusted, network)
+	}
+	return trusted, nil
+}
+
+func (trusted trustedProxySet) contains(address net.IP) bool {
+	for _, network := range trusted {
+		if network.Contains(address) {
+			return true
+		}
+	}
+	return false
 }
 
 func (l *loginThrottle) begin(key string, now time.Time) bool {
