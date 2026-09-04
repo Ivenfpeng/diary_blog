@@ -105,6 +105,11 @@ func (h *authHandler) routes(router chi.Router) {
 	router.Post("/api/auth/login", h.login)
 	router.With(h.requireSession).Get("/api/auth/session", h.currentSession)
 	router.With(h.requireSession, h.requireCSRF).Delete("/api/auth/session", h.logout)
+}
+
+// adminNotFound retains the authentication and CSRF boundary for unregistered
+// administration paths without providing a generic administration handler.
+func (h *authHandler) adminNotFound(router chi.Router) {
 	router.With(h.requireSession, h.requireCSRF).Handle("/api/admin/*", http.NotFoundHandler())
 }
 
@@ -221,11 +226,6 @@ func clearAuthCookies(w http.ResponseWriter) {
 	expired := time.Unix(1, 0).UTC()
 	http.SetCookie(w, &http.Cookie{Name: SessionCookieName, Path: "/", Expires: expired, MaxAge: -1, Secure: true, HttpOnly: true, SameSite: http.SameSiteStrictMode})
 	http.SetCookie(w, &http.Cookie{Name: CSRFCookieName, Path: "/", Expires: expired, MaxAge: -1, Secure: true, HttpOnly: false, SameSite: http.SameSiteStrictMode})
-}
-
-func writeAPIError(w http.ResponseWriter, r *http.Request, status int, code, message string) {
-	requestID, _ := r.Context().Value(requestIDKey).(string)
-	writeJSON(w, status, map[string]any{"error": map[string]any{"code": code, "message": message, "request_id": requestID}})
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

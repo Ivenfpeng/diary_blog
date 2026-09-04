@@ -74,6 +74,8 @@ func NewServer(repository posts.Repository, options ...ServerOptions) http.Handl
 			panic(fmt.Sprintf("initialize authentication: %v", err))
 		}
 		authAPI.routes(router)
+		newAdminPostAPI(posts.NewService(repository, nil, config.Clock)).routes(router, authAPI.requireSession, authAPI.requireCSRF)
+		authAPI.adminNotFound(router)
 	}
 
 	static, err := fs.Sub(webassets.Assets, "static")
