@@ -33,8 +33,19 @@ func main() {
 	logger := platform.NewLogger(os.Stdout)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := serve(ctx, cfg, logger); err != nil {
-		logger.Error("server stopped", "error", err)
+	args := os.Args[1:]
+	serving := len(args) == 0 || (len(args) == 1 && args[0] == "serve")
+	if serving {
+		err = serve(ctx, cfg, logger)
+	} else {
+		err = runCommand(ctx, cfg, args, os.Stdin, os.Stdout)
+	}
+	if err != nil {
+		if serving {
+			logger.Error("server stopped", "error", err)
+		} else {
+			fmt.Fprintln(os.Stderr, err)
+		}
 		os.Exit(1)
 	}
 }
