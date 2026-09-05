@@ -21,8 +21,41 @@ import (
 	"github.com/Ivenfpeng/diary_blog/internal/auth"
 	appdb "github.com/Ivenfpeng/diary_blog/internal/database"
 	sqliterepo "github.com/Ivenfpeng/diary_blog/internal/repository/sqlite"
+	"github.com/Ivenfpeng/diary_blog/internal/site"
 	"github.com/Ivenfpeng/diary_blog/internal/web"
 )
+
+func TestAdminPublicationInvalidatesPublicCache(t *testing.T) {
+	cache := site.NewCache(time.Hour)
+	for _, key := range []string{site.ArticleCacheKey("publish-cache"), site.HomeCacheKey(), site.ArchiveCacheKey(), site.CategoryCacheKey("go"), site.TagCacheKey("testing"), site.RSSCacheKey(), site.SitemapCacheKey()} {
+		cache.Set(key, []byte("cached"))
+	}
+	server, _, session, csrf := newAdminServerWithCache(t, cache)
+	post := createAdminDraft(t, server, session, csrf, map[string]any{
+		"slug": "publish-cache", "title": "Publish cache", "content_md": "cache", "tag_ids": []int64{},
+	})
+	id := int64(post["id"].(float64))
+	response := adminRequest(t, server, session, csrf, http.MethodPost, "/api/admin/posts/"+strconv.FormatInt(id, 10)+"/publish", map[string]any{"expected_revision": 1})
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("publish status = %d: %s", response.StatusCode, readBody(t, response))
+	}
+	for _, key := range []string{site.ArticleCacheKey("publish-cache"), site.HomeCacheKey(), site.ArchiveCacheKey(), site.CategoryCacheKey("go"), site.TagCacheKey("testing"), site.RSSCacheKey(), site.SitemapCacheKey()} {
+		if _, ok := cache.Get(key); ok {
+			t.Errorf("publication retained %q", key)
+		}
+	}
+	cache.Set(site.ArticleCacheKey("publish-cache"), []byte("cached"))
+	cache.Set(site.HomeCacheKey(), []byte("cached"))
+	response = adminRequest(t, server, session, csrf, http.MethodPost, "/api/admin/posts/"+strconv.FormatInt(id, 10)+"/archive", map[string]any{"expected_revision": 2})
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("archive status = %d: %s", response.StatusCode, readBody(t, response))
+	}
+	for _, key := range []string{site.ArticleCacheKey("publish-cache"), site.HomeCacheKey()} {
+		if _, ok := cache.Get(key); ok {
+			t.Errorf("archive retained %q", key)
+		}
+	}
+}
 
 func TestAdminPostAPICreateGetListAndSaveDraft(t *testing.T) {
 	server, _, session, csrf := newAdminServer(t)
@@ -274,7 +307,15 @@ func newAdminServer(t *testing.T) (*httptest.Server, *sql.DB, *http.Cookie, *htt
 	return newAdminServerWithMediaDir(t, "")
 }
 
+func newAdminServerWithCache(t *testing.T, cache *site.Cache) (*httptest.Server, *sql.DB, *http.Cookie, *http.Cookie) {
+	return newAdminServerWithOptions(t, "", cache)
+}
+
 func newAdminServerWithMediaDir(t *testing.T, mediaDir string) (*httptest.Server, *sql.DB, *http.Cookie, *http.Cookie) {
+	return newAdminServerWithOptions(t, mediaDir, nil)
+}
+
+func newAdminServerWithOptions(t *testing.T, mediaDir string, cache *site.Cache) (*httptest.Server, *sql.DB, *http.Cookie, *http.Cookie) {
 	t.Helper()
 	ctx := context.Background()
 	db, err := appdb.Open(ctx, filepath.Join(t.TempDir(), "data"))
@@ -294,7 +335,7 @@ func newAdminServerWithMediaDir(t *testing.T, mediaDir string) (*httptest.Server
 	if _, err := repo.UpsertAdmin(ctx, "admin", passwordHash, now); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewTLSServer(web.NewServer(repo, web.ServerOptions{AuthRepository: repo, MediaDir: mediaDir, PublicURL: authOrigin, Clock: func() time.Time { return now }}))
+	server := httptest.NewTLSServer(web.NewServer(repo, web.ServerOptions{AuthRepository: repo, MediaDir: mediaDir, PublicURL: authOrigin, Clock: func() time.Time { return now }, Cache: cache}))
 	t.Cleanup(server.Close)
 	response := login(t, server, "admin", "secret")
 	if response.StatusCode != http.StatusOK {

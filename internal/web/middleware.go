@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Ivenfpeng/diary_blog/internal/auth"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
@@ -37,6 +38,9 @@ func recoverPanics(logger *slog.Logger) func(http.Handler) http.Handler {
 			defer func() {
 				if recovered := recover(); recovered != nil {
 					logger.Error("panic while serving request", "request_id", r.Context().Value(requestIDKey))
+					if requestID, ok := r.Context().Value(requestIDKey).(string); ok {
+						w.Header().Set("X-Request-ID", requestID)
+					}
 					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				}
 			}()
@@ -49,10 +53,34 @@ func accessLog(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			started := time.Now()
-			next.ServeHTTP(w, r)
-			logger.Info("http request", "request_id", r.Context().Value(requestIDKey), "method", r.Method, "path", r.URL.Path, "duration", time.Since(started))
+			response := &loggingResponseWriter{ResponseWriter: w, status: http.StatusOK}
+			defer func() {
+				route := r.URL.Path
+				if routeContext := chi.RouteContext(r.Context()); routeContext != nil && routeContext.RoutePattern() != "" {
+					route = routeContext.RoutePattern()
+				}
+				logger.Info("http request", "request_id", r.Context().Value(requestIDKey), "method", r.Method, "route", route, "status", response.status, "bytes", response.bytes, "duration", time.Since(started))
+			}()
+			next.ServeHTTP(response, r)
 		})
 	}
+}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	status int
+	bytes  int
+}
+
+func (w *loggingResponseWriter) WriteHeader(status int) {
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *loggingResponseWriter) Write(value []byte) (int, error) {
+	count, err := w.ResponseWriter.Write(value)
+	w.bytes += count
+	return count, err
 }
 
 func (h *authHandler) requireSession(next http.Handler) http.Handler {

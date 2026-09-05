@@ -25,6 +25,7 @@ type publicHandler struct {
 	renderer      *content.Renderer
 	publicBaseURL *url.URL
 	clock         func() time.Time
+	cache         *site.Cache
 }
 
 type pageData struct {
@@ -52,7 +53,7 @@ type pageData struct {
 	Status               int
 }
 
-func newPublicHandler(repository posts.Repository, publicURL string, clock func() time.Time) (*publicHandler, error) {
+func newPublicHandler(repository posts.Repository, publicURL string, clock func() time.Time, cache *site.Cache) (*publicHandler, error) {
 	publicBaseURL, err := normalizePublicURL(publicURL)
 	if err != nil {
 		return nil, err
@@ -68,19 +69,55 @@ func newPublicHandler(repository posts.Repository, publicURL string, clock func(
 	if err != nil {
 		return nil, err
 	}
-	return &publicHandler{repository: repository, templates: base, renderer: content.NewRenderer(), publicBaseURL: publicBaseURL, clock: clock}, nil
+	return &publicHandler{repository: repository, templates: base, renderer: content.NewRenderer(), publicBaseURL: publicBaseURL, clock: clock, cache: cache}, nil
 }
 
 func (h *publicHandler) routes(router chi.Router) {
-	router.Get("/", h.home)
-	router.Get("/posts/{slug}", h.article)
-	router.Get("/categories/{slug}", h.category)
-	router.Get("/tags/{slug}", h.tag)
-	router.Get("/archive", h.archive)
+	router.Get("/", h.cached(func(*http.Request) string { return site.HomeCacheKey() }, "text/html; charset=utf-8", h.home))
+	router.Get("/posts/{slug}", h.cached(func(r *http.Request) string { return site.ArticleCacheKey(chi.URLParam(r, "slug")) }, "text/html; charset=utf-8", h.article))
+	router.Get("/categories/{slug}", h.cached(func(r *http.Request) string { return site.CategoryCacheKey(chi.URLParam(r, "slug")) }, "text/html; charset=utf-8", h.category))
+	router.Get("/tags/{slug}", h.cached(func(r *http.Request) string { return site.TagCacheKey(chi.URLParam(r, "slug")) }, "text/html; charset=utf-8", h.tag))
+	router.Get("/archive", h.cached(func(*http.Request) string { return site.ArchiveCacheKey() }, "text/html; charset=utf-8", h.archive))
 	router.Get("/search", h.search)
-	router.Get("/rss.xml", h.rss)
-	router.Get("/sitemap.xml", h.sitemap)
+	router.Get("/rss.xml", h.cached(func(*http.Request) string { return site.RSSCacheKey() }, "application/xml; charset=utf-8", h.rss))
+	router.Get("/sitemap.xml", h.cached(func(*http.Request) string { return site.SitemapCacheKey() }, "application/xml; charset=utf-8", h.sitemap))
 }
+
+func (h *publicHandler) cached(key func(*http.Request) string, contentType string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if h.cache == nil {
+			next(w, r)
+			return
+		}
+		cacheKey := key(r)
+		if value, ok := h.cache.Get(cacheKey); ok {
+			w.Header().Set("Content-Type", contentType)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(value)
+			return
+		}
+		capture := &cachedResponseWriter{header: make(http.Header), status: http.StatusOK}
+		next(capture, r)
+		for name, values := range capture.header {
+			w.Header()[name] = append([]string(nil), values...)
+		}
+		w.WriteHeader(capture.status)
+		_, _ = w.Write(capture.body.Bytes())
+		if capture.status == http.StatusOK {
+			h.cache.Set(cacheKey, capture.body.Bytes())
+		}
+	}
+}
+
+type cachedResponseWriter struct {
+	header http.Header
+	body   bytes.Buffer
+	status int
+}
+
+func (w *cachedResponseWriter) Header() http.Header             { return w.header }
+func (w *cachedResponseWriter) WriteHeader(status int)          { w.status = status }
+func (w *cachedResponseWriter) Write(value []byte) (int, error) { return w.body.Write(value) }
 
 func (h *publicHandler) home(w http.ResponseWriter, r *http.Request) {
 	h.renderListing(w, r, "home.html", pageData{Title: "Articles", Heading: "Latest writing", Description: "Technical notes, field reports, and durable explanations."}, posts.PublishedFilter{Page: 1, PageSize: publicPageSize})

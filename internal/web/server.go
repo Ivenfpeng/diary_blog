@@ -12,6 +12,7 @@ import (
 	"github.com/Ivenfpeng/diary_blog/internal/auth"
 	"github.com/Ivenfpeng/diary_blog/internal/posts"
 	"github.com/Ivenfpeng/diary_blog/internal/repository/sqlite"
+	"github.com/Ivenfpeng/diary_blog/internal/site"
 	webassets "github.com/Ivenfpeng/diary_blog/web"
 	"github.com/go-chi/chi/v5"
 )
@@ -25,6 +26,9 @@ type ServerOptions struct {
 	Clock          func() time.Time
 	AuthRepository auth.Repository
 	Auth           AuthOptions
+	Cache          *site.Cache
+	// Ready verifies storage dependencies after startup migrations finish.
+	Ready func() error
 }
 
 // AuthOptions bounds authentication work and throttle state, and configures trusted network peers.
@@ -54,14 +58,20 @@ func NewServer(repository posts.Repository, options ...ServerOptions) http.Handl
 		config.Clock = time.Now
 	}
 
-	public, err := newPublicHandler(repository, config.PublicURL, config.Clock)
+	public, err := newPublicHandler(repository, config.PublicURL, config.Clock, config.Cache)
 	if err != nil {
 		panic(fmt.Sprintf("load public templates: %v", err))
 	}
 	router := chi.NewRouter()
 	router.Use(requestID, recoverPanics(config.Logger), accessLog(config.Logger))
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	router.Get("/readyz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	router.Get("/readyz", func(w http.ResponseWriter, _ *http.Request) {
+		if config.Ready != nil && config.Ready() != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 	authRepository := config.Auth.Repository
 	if authRepository == nil {
 		authRepository = config.AuthRepository
@@ -75,7 +85,7 @@ func NewServer(repository posts.Repository, options ...ServerOptions) http.Handl
 			panic(fmt.Sprintf("initialize authentication: %v", err))
 		}
 		authAPI.routes(router)
-		newAdminPostAPI(posts.NewService(repository, nil, config.Clock)).routes(router, authAPI.requireSession, authAPI.requireCSRF)
+		newAdminPostAPI(posts.NewService(repository, nil, config.Clock), config.Cache).routes(router, authAPI.requireSession, authAPI.requireCSRF)
 		if managementRepository, ok := repository.(*sqlite.PostRepository); ok {
 			newAdminManagementAPI(managementRepository, config.MediaDir, config.Clock).routes(router, authAPI.requireSession, authAPI.requireCSRF)
 		}

@@ -15,10 +15,28 @@ import (
 	appdb "github.com/Ivenfpeng/diary_blog/internal/database"
 	"github.com/Ivenfpeng/diary_blog/internal/posts"
 	sqliterepo "github.com/Ivenfpeng/diary_blog/internal/repository/sqlite"
+	"github.com/Ivenfpeng/diary_blog/internal/site"
 	web "github.com/Ivenfpeng/diary_blog/internal/web"
 )
 
 const defaultPublicURL = "http://localhost:8080"
+
+func TestPublicHomeUsesCacheUntilPublicationInvalidation(t *testing.T) {
+	repo, _, _, closeDB := publicFixture(t)
+	t.Cleanup(closeDB)
+	cache := site.NewCache(time.Hour)
+	cache.Set(site.HomeCacheKey(), []byte("cached home"))
+	server := httptest.NewServer(web.NewServer(repo, web.ServerOptions{Cache: cache}))
+	t.Cleanup(server.Close)
+
+	if body := getHTML(t, server.URL+"/"); body != "cached home" {
+		t.Fatalf("cached home = %q, want cached response", body)
+	}
+	cache.InvalidatePublication("reading-safely")
+	if body := getHTML(t, server.URL+"/"); !strings.Contains(body, "Reading Safely") {
+		t.Fatalf("home after invalidation did not render repository data: %s", body)
+	}
+}
 
 func TestPublicArticleRendersCanonicalSafeContentReadingTimeAndTOC(t *testing.T) {
 	repo, published, _, closeDB := publicFixture(t)

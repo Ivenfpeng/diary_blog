@@ -11,6 +11,7 @@ import (
 
 	"github.com/Ivenfpeng/diary_blog/internal/content"
 	"github.com/Ivenfpeng/diary_blog/internal/posts"
+	"github.com/Ivenfpeng/diary_blog/internal/site"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -18,6 +19,7 @@ const adminPostBodyLimit = 2 * 1024 * 1024
 
 type adminPostAPI struct {
 	posts *posts.Service
+	cache *site.Cache
 }
 
 type postInputRequest struct {
@@ -74,8 +76,8 @@ type revisionResponse struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-func newAdminPostAPI(service *posts.Service) *adminPostAPI {
-	return &adminPostAPI{posts: service}
+func newAdminPostAPI(service *posts.Service, cache *site.Cache) *adminPostAPI {
+	return &adminPostAPI{posts: service, cache: cache}
 }
 
 func (a *adminPostAPI) routes(router chi.Router, requireSession, requireCSRF func(http.Handler) http.Handler) {
@@ -195,6 +197,9 @@ func (a *adminPostAPI) changeRevision(w http.ResponseWriter, r *http.Request, ac
 	if err != nil {
 		a.writePostError(w, r, err)
 		return
+	}
+	if a.cache != nil {
+		a.cache.InvalidatePublication(post.Slug)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"post": newPostResponse(post)})
 }
