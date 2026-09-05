@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { FileText, LayoutDashboard, Menu, X } from '@lucide/vue'
+import { FileText, FolderTree, Image, LayoutDashboard, Menu, Settings, X } from '@lucide/vue'
 import IconButton from '../components/IconButton.vue'
 import { session } from '../state/session'
 
@@ -21,6 +21,9 @@ const closeNavigation = () => { navigationOpen.value = false }
           <FileText :size="18" aria-hidden="true" />
           Posts
         </RouterLink>
+        <RouterLink :to="{ name: 'taxonomy' }" class="nav-link" @click="closeNavigation"><FolderTree :size="18" aria-hidden="true" /> Categories &amp; tags</RouterLink>
+        <RouterLink :to="{ name: 'media' }" class="nav-link" @click="closeNavigation"><Image :size="18" aria-hidden="true" /> Media</RouterLink>
+        <RouterLink :to="{ name: 'settings' }" class="nav-link" @click="closeNavigation"><Settings :size="18" aria-hidden="true" /> Settings</RouterLink>
       </nav>
     </aside>
     <div class="admin-workspace">

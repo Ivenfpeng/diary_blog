@@ -33,7 +33,8 @@ export async function apiRequest<T>(path: string, options: APIRequestOptions = {
   const method = (options.method ?? 'GET').toUpperCase()
   const headers = new Headers(options.headers)
 
-  if (options.body !== undefined) {
+  const formData = options.body instanceof FormData
+  if (options.body !== undefined && !formData) {
     headers.set('Content-Type', 'application/json')
   }
   if (unsafeMethods.has(method)) {
@@ -45,7 +46,7 @@ export async function apiRequest<T>(path: string, options: APIRequestOptions = {
     ...options,
     method,
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body: options.body === undefined ? undefined : formData ? options.body as FormData : JSON.stringify(options.body),
     credentials: 'include',
   })
 

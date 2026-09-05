@@ -4,6 +4,9 @@ import DashboardView from './views/DashboardView.vue'
 import LoginView from './views/LoginView.vue'
 import PostsView from './views/PostsView.vue'
 import PostEditorView from './views/PostEditorView.vue'
+import TaxonomyView from './views/TaxonomyView.vue'
+import MediaView from './views/MediaView.vue'
+import SettingsView from './views/SettingsView.vue'
 import { restoreSession, session } from './state/session'
 
 const router = createRouter({
@@ -18,6 +21,9 @@ const router = createRouter({
         { path: '', name: 'dashboard', component: DashboardView },
         { path: 'posts', name: 'posts', component: PostsView },
         { path: 'posts/:id', name: 'post-edit', component: PostEditorView },
+        { path: 'taxonomy', name: 'taxonomy', component: TaxonomyView },
+        { path: 'media', name: 'media', component: MediaView },
+        { path: 'settings', name: 'settings', component: SettingsView },
       ],
     },
     { path: '/:pathMatch(.*)*', redirect: { name: 'dashboard' } },

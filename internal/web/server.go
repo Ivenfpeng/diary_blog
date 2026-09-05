@@ -11,6 +11,7 @@ import (
 
 	"github.com/Ivenfpeng/diary_blog/internal/auth"
 	"github.com/Ivenfpeng/diary_blog/internal/posts"
+	"github.com/Ivenfpeng/diary_blog/internal/repository/sqlite"
 	webassets "github.com/Ivenfpeng/diary_blog/web"
 	"github.com/go-chi/chi/v5"
 )
@@ -75,6 +76,9 @@ func NewServer(repository posts.Repository, options ...ServerOptions) http.Handl
 		}
 		authAPI.routes(router)
 		newAdminPostAPI(posts.NewService(repository, nil, config.Clock)).routes(router, authAPI.requireSession, authAPI.requireCSRF)
+		if managementRepository, ok := repository.(*sqlite.PostRepository); ok {
+			newAdminManagementAPI(managementRepository, config.MediaDir, config.Clock).routes(router, authAPI.requireSession, authAPI.requireCSRF)
+		}
 		authAPI.adminNotFound(router)
 	}
 
