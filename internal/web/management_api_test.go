@@ -16,6 +16,17 @@ func TestMediaContainerMetadataRejectsMalformedWebPAndAVIF(t *testing.T) {
 	if _, _, ok := webPSize(webp); ok {
 		t.Fatal("header-only WebP was accepted")
 	}
+	minimalVP8 := make([]byte, 30)
+	copy(minimalVP8[:4], "RIFF")
+	binary.LittleEndian.PutUint32(minimalVP8[4:8], uint32(len(minimalVP8)-8))
+	copy(minimalVP8[8:12], "WEBP")
+	copy(minimalVP8[12:16], "VP8 ")
+	binary.LittleEndian.PutUint32(minimalVP8[16:20], 10)
+	copy(minimalVP8[23:26], "\x9d\x01\x2a")
+	minimalVP8[26], minimalVP8[28] = 1, 1
+	if _, _, ok := webPSize(minimalVP8); ok {
+		t.Fatal("WebP frame header without compressed payload was accepted")
+	}
 
 	avif := make([]byte, 32)
 	binary.BigEndian.PutUint32(avif[:4], 24)

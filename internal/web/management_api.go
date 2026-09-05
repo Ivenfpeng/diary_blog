@@ -377,20 +377,20 @@ func webPSize(b []byte) (int, int, bool) {
 			height = int(data[7]) | int(data[8])<<8 | int(data[9])<<16
 			height++
 		case "VP8 ":
-			if len(data) < 10 || string(data[3:6]) != "\x9d\x01\x2a" {
+			if len(data) <= 10 || string(data[3:6]) != "\x9d\x01\x2a" {
 				return 0, 0, false
 			}
 			width, height = int(binary.LittleEndian.Uint16(data[6:8])&0x3fff), int(binary.LittleEndian.Uint16(data[8:10])&0x3fff)
 			imageChunk = true
 		case "VP8L":
-			if len(data) < 5 || data[0] != 0x2f {
+			if len(data) <= 5 || data[0] != 0x2f {
 				return 0, 0, false
 			}
 			value := binary.LittleEndian.Uint32(data[1:5])
 			width, height = int(value&0x3fff)+1, int((value>>14)&0x3fff)+1
 			imageChunk = true
 		case "ANMF":
-			if len(data) < 16 {
+			if len(data) <= 16 {
 				return 0, 0, false
 			}
 			imageChunk = true
@@ -411,7 +411,7 @@ func avifSize(b []byte) (int, int, bool) {
 	if ftypSize < 16 || ftypSize > len(b) || !avifBrand(b[8:ftypSize]) {
 		return 0, 0, false
 	}
-	var meta, iprp, ipco, hdlr, pitm, iinf, iloc, ispe bool
+	var meta, iprp, ipco, hdlr, pitm, iinf, iloc, ipma, mdat, ispe bool
 	var width, height int
 	var walk func(int, int, int) bool
 	walk = func(start, end, depth int) bool {
@@ -444,13 +444,17 @@ func avifSize(b []byte) (int, int, bool) {
 					return false
 				}
 			case "hdlr":
-				hdlr = true
+				hdlr = payloadEnd-payloadStart >= 20
 			case "pitm":
-				pitm = true
+				pitm = payloadEnd-payloadStart >= 6
 			case "iinf":
-				iinf = true
+				iinf = payloadEnd-payloadStart >= 6
 			case "iloc":
-				iloc = true
+				iloc = payloadEnd-payloadStart >= 10
+			case "ipma":
+				ipma = payloadEnd-payloadStart >= 12
+			case "mdat":
+				mdat = payloadEnd > payloadStart
 			case "ispe":
 				if payloadStart+12 > payloadEnd {
 					return false
@@ -465,7 +469,7 @@ func avifSize(b []byte) (int, int, bool) {
 	if !walk(0, len(b), 0) {
 		return 0, 0, false
 	}
-	return width, height, meta && iprp && ipco && hdlr && pitm && iinf && iloc && ispe
+	return width, height, meta && iprp && ipco && hdlr && pitm && iinf && iloc && ipma && mdat && ispe
 }
 
 func avifBrand(ftyp []byte) bool {
