@@ -1114,25 +1114,25 @@ git commit -m "feat: add administration login and shell"
 - Test: `admin/src/views/PostEditorView.test.ts`
 - Modify: `admin/src/router.ts`
 
-- [ ] **Step 1: Write failing editor state tests**
+- [x] **Step 1: Write failing editor state tests**
 
 Use fake timers. Assert changes trigger autosave after 1.5 seconds, only one save runs at a time, a newer change queues one additional save, successful save updates revision, and `409` preserves local Markdown while setting conflict state.
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 Run: `npm --prefix admin test -- editor PostEditorView`
 
 Expected: FAIL.
 
-- [ ] **Step 3: Implement CodeMirror and editor state**
+- [x] **Step 3: Implement CodeMirror and editor state**
 
 `MarkdownEditor.vue` owns one CodeMirror 6 editor instance, emits string updates, supports Markdown syntax, line wrapping, keyboard focus, and cleanup on unmount. `editor.ts` owns article fields, dirty state, save status, revision, conflict state, preview HTML, and serialized autosave.
 
-- [ ] **Step 4: Implement article workflows**
+- [x] **Step 4: Implement article workflows**
 
 The list supports status filter, text search, pagination, create, and edit. The editor provides title, slug, summary, category, tags, Markdown, preview, save, publish, archive, and revision restore. Publish is disabled while validation fails or a save is running.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 
