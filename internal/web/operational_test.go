@@ -41,6 +41,24 @@ func TestRecoveryReturnsRequestIDWithoutPanicDetails(t *testing.T) {
 	}
 }
 
+func TestRecoveredPanicAccessLogHasServerErrorStatus(t *testing.T) {
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil))
+	handler := requestID(accessLog(logger)(recoverPanics(logger)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("secret stack detail")
+	}))))
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if recorder.Code != http.StatusInternalServerError {
+		t.Fatalf("recovery status = %d, want %d", recorder.Code, http.StatusInternalServerError)
+	}
+	if !strings.Contains(output.String(), `"status":500`) {
+		t.Fatalf("panic access log did not record 500: %s", output.String())
+	}
+}
+
 func TestAccessLogOmitsCookies(t *testing.T) {
 	var output bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&output, nil))

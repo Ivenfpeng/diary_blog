@@ -63,7 +63,7 @@ func NewServer(repository posts.Repository, options ...ServerOptions) http.Handl
 		panic(fmt.Sprintf("load public templates: %v", err))
 	}
 	router := chi.NewRouter()
-	router.Use(requestID, recoverPanics(config.Logger), accessLog(config.Logger))
+	router.Use(requestID, accessLog(config.Logger), recoverPanics(config.Logger))
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	router.Get("/readyz", func(w http.ResponseWriter, _ *http.Request) {
 		if config.Ready != nil && config.Ready() != nil {

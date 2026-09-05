@@ -64,18 +64,17 @@ func (c *Cache) Set(key string, value []byte) {
 }
 
 // InvalidatePublication removes all public data that can contain a published
-// article. Category and tag keys are invalidated by prefix because a post may
-// have been moved between taxonomy terms.
+// article. Article, category, and tag keys are invalidated by prefix because a
+// post may have been moved or renamed between publication states.
 func (c *Cache) InvalidatePublication(slug string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	delete(c.entries, ArticleCacheKey(slug))
 	delete(c.entries, HomeCacheKey())
 	delete(c.entries, ArchiveCacheKey())
 	delete(c.entries, RSSCacheKey())
 	delete(c.entries, SitemapCacheKey())
 	for key := range c.entries {
-		if strings.HasPrefix(key, categoryKeyPrefix) || strings.HasPrefix(key, tagKeyPrefix) {
+		if strings.HasPrefix(key, articleKeyPrefix) || strings.HasPrefix(key, categoryKeyPrefix) || strings.HasPrefix(key, tagKeyPrefix) {
 			delete(c.entries, key)
 		}
 	}

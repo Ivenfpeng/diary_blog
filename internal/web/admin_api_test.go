@@ -55,6 +55,29 @@ func TestAdminPublicationInvalidatesPublicCache(t *testing.T) {
 			t.Errorf("archive retained %q", key)
 		}
 	}
+
+	changed := createAdminDraft(t, server, session, csrf, map[string]any{
+		"slug": "old-slug", "title": "Old slug", "content_md": "cache", "tag_ids": []int64{},
+	})
+	changedID := int64(changed["id"].(float64))
+	response = adminRequest(t, server, session, csrf, http.MethodPost, "/api/admin/posts/"+strconv.FormatInt(changedID, 10)+"/publish", map[string]any{"expected_revision": 1})
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("initial publish status = %d: %s", response.StatusCode, readBody(t, response))
+	}
+	cache.Set(site.ArticleCacheKey("old-slug"), []byte("cached old article"))
+	response = adminRequest(t, server, session, csrf, http.MethodPut, "/api/admin/posts/"+strconv.FormatInt(changedID, 10), map[string]any{
+		"slug": "new-slug", "title": "New slug", "content_md": "cache", "tag_ids": []int64{}, "expected_revision": 2,
+	})
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("slug save status = %d: %s", response.StatusCode, readBody(t, response))
+	}
+	response = adminRequest(t, server, session, csrf, http.MethodPost, "/api/admin/posts/"+strconv.FormatInt(changedID, 10)+"/publish", map[string]any{"expected_revision": 3})
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("republish status = %d: %s", response.StatusCode, readBody(t, response))
+	}
+	if _, ok := cache.Get(site.ArticleCacheKey("old-slug")); ok {
+		t.Fatal("republishing a slug change retained old article cache")
+	}
 }
 
 func TestAdminPostAPICreateGetListAndSaveDraft(t *testing.T) {
