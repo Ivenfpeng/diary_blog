@@ -411,7 +411,7 @@ func avifSize(b []byte) (int, int, bool) {
 	if ftypSize < 16 || ftypSize > len(b) || !avifBrand(b[8:ftypSize]) {
 		return 0, 0, false
 	}
-	var meta, iprp, ipco, hdlr, pitm, iinf, iloc, ipma, mdat, ispe bool
+	var meta, iprp, ipco, hdlr, pitm, iinf, iloc, ipma, mdat, ispe, av1C bool
 	var width, height int
 	var walk func(int, int, int) bool
 	walk = func(start, end, depth int) bool {
@@ -444,7 +444,7 @@ func avifSize(b []byte) (int, int, bool) {
 					return false
 				}
 			case "hdlr":
-				hdlr = payloadEnd-payloadStart >= 20
+				hdlr = payloadEnd-payloadStart >= 20 && string(b[payloadStart+8:payloadStart+12]) == "pict"
 			case "pitm":
 				pitm = payloadEnd-payloadStart >= 6
 			case "iinf":
@@ -453,6 +453,8 @@ func avifSize(b []byte) (int, int, bool) {
 				iloc = payloadEnd-payloadStart >= 10
 			case "ipma":
 				ipma = payloadEnd-payloadStart >= 12
+			case "av1C":
+				av1C = payloadEnd-payloadStart >= 4 && b[payloadStart]&0x80 != 0
 			case "mdat":
 				mdat = payloadEnd > payloadStart
 			case "ispe":
@@ -469,7 +471,7 @@ func avifSize(b []byte) (int, int, bool) {
 	if !walk(0, len(b), 0) {
 		return 0, 0, false
 	}
-	return width, height, meta && iprp && ipco && hdlr && pitm && iinf && iloc && ipma && mdat && ispe
+	return width, height, meta && iprp && ipco && hdlr && pitm && iinf && iloc && ipma && mdat && ispe && av1C
 }
 
 func avifBrand(ftyp []byte) bool {
