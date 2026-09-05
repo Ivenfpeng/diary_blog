@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -102,6 +103,133 @@ func TestRestoreRefusesNonEmptyDestinationWithoutForce(t *testing.T) {
 	if err := operations.Restore(context.Background(), archive, destination, false); err == nil {
 		t.Fatal("restore into non-empty destination succeeded without force")
 	}
+}
+
+func TestBackupRejectsOutputInsideMediaDirectory(t *testing.T) {
+	source := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(source, "media"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	err := operations.Backup(context.Background(), source, filepath.Join(source, "media", "site.tar.gz"))
+	if err == nil {
+		t.Fatal("backup accepted output inside media directory")
+	}
+}
+
+func TestRestoreRejectsArbitraryTopLevelEntry(t *testing.T) {
+	archive := writeTestArchive(t, testArchiveEntry{name: "unexpected.txt", body: []byte("no")})
+	err := operations.Restore(context.Background(), archive, filepath.Join(t.TempDir(), "restored"), false)
+	if err == nil {
+		t.Fatal("restore accepted arbitrary top-level archive entry")
+	}
+}
+
+func TestRestoreRejectsInvalidDatabase(t *testing.T) {
+	archive := writeTestArchive(t,
+		testArchiveEntry{name: "blog.db", body: []byte("not sqlite")},
+		testArchiveEntry{name: "media/", directory: true},
+	)
+	err := operations.Restore(context.Background(), archive, filepath.Join(t.TempDir(), "restored"), false)
+	if err == nil {
+		t.Fatal("restore accepted invalid database")
+	}
+}
+
+func TestRestoreRejectsOversizedEntry(t *testing.T) {
+	archive := filepath.Join(t.TempDir(), "oversized.tar.gz")
+	f, err := os.Create(archive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gz := gzip.NewWriter(f)
+	tw := tar.NewWriter(gz)
+	if err := tw.WriteHeader(&tar.Header{Name: "blog.db", Mode: 0o600, Size: 65 << 20}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.CopyN(tw, zeroReader{}, 65<<20); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	err = operations.Restore(context.Background(), archive, filepath.Join(t.TempDir(), "restored"), false)
+	if err == nil {
+		t.Fatal("restore accepted oversized archive entry")
+	}
+}
+
+type testArchiveEntry struct {
+	name      string
+	body      []byte
+	directory bool
+}
+
+type zeroReader struct{}
+
+func (zeroReader) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = 0
+	}
+	return len(p), nil
+}
+
+func writeTestArchive(t *testing.T, entries ...testArchiveEntry) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "test.tar.gz")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gz := gzip.NewWriter(f)
+	tw := tar.NewWriter(gz)
+	checksums := map[string]string{}
+	for _, entry := range entries {
+		header := &tar.Header{Name: entry.name, Mode: 0o600}
+		if entry.directory {
+			header.Typeflag = tar.TypeDir
+		} else {
+			header.Typeflag = tar.TypeReg
+			header.Size = int64(len(entry.body))
+		}
+		if err := tw.WriteHeader(header); err != nil {
+			t.Fatal(err)
+		}
+		if len(entry.body) != 0 {
+			if _, err := tw.Write(entry.body); err != nil {
+				t.Fatal(err)
+			}
+		}
+		checksums[entry.name] = checksum(entry.body)
+	}
+	manifest, err := json.Marshal(struct {
+		Version   int               `json:"version"`
+		Checksums map[string]string `json:"checksums"`
+	}{Version: 1, Checksums: checksums})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.WriteHeader(&tar.Header{Name: "manifest.json", Mode: 0o600, Size: int64(len(manifest)), Typeflag: tar.TypeReg}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write(manifest); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func archiveChecksums(t *testing.T, archive string) map[string]string {

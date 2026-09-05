@@ -11,6 +11,7 @@ import (
 
 	"github.com/Ivenfpeng/diary_blog/internal/config"
 	appdb "github.com/Ivenfpeng/diary_blog/internal/database"
+	"github.com/Ivenfpeng/diary_blog/internal/operations"
 	sqliterepo "github.com/Ivenfpeng/diary_blog/internal/repository/sqlite"
 )
 
@@ -67,13 +68,33 @@ func TestAdminCommandRequiresUsername(t *testing.T) {
 
 func TestRestoreCommandPassesForceFlag(t *testing.T) {
 	dataDir := t.TempDir()
-	archive := filepath.Join(t.TempDir(), "missing.tar.gz")
+	source := t.TempDir()
+	sourceDB, err := appdb.Open(context.Background(), source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := appdb.Migrate(context.Background(), sourceDB); err != nil {
+		t.Fatal(err)
+	}
+	if err := sourceDB.Close(); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(t.TempDir(), "site.tar.gz")
+	if err := operations.Backup(context.Background(), source, archive); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(dataDir, "occupied"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var output bytes.Buffer
-	err := runCommand(context.Background(), config.Config{DataDir: dataDir}, []string{"restore", "--input", archive}, bytes.NewReader(nil), &output)
-	if err == nil || !bytes.Contains([]byte(err.Error()), []byte("not empty")) {
-		t.Fatalf("restore error = %v, want non-empty destination refusal", err)
+	err = runCommand(context.Background(), config.Config{DataDir: dataDir}, []string{"restore", "--input", archive, "--force"}, bytes.NewReader(nil), &output)
+	if err != nil {
+		t.Fatalf("forced restore: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "blog.db")); err != nil {
+		t.Fatalf("restored database: %v", err)
+	}
+	if bytes.Contains(output.Bytes(), []byte("occupied")) {
+		t.Fatalf("restore output exposed replaced contents: %q", output.String())
 	}
 }
