@@ -108,6 +108,20 @@ type onlineBackupConn interface {
 // snapshotDatabase uses the driver's SQLite online-backup API to create a
 // transactionally consistent temporary database while the source remains open.
 func snapshotDatabase(ctx context.Context, dataDir, destination string) error {
+	sourcePath := filepath.Join(dataDir, databaseName)
+	info, err := os.Stat(sourcePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("backup source database is missing: %s", sourcePath)
+		}
+		return fmt.Errorf("inspect backup source database: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("backup source database is not a regular file: %s", sourcePath)
+	}
+	if err := validateBlogDatabase(ctx, sourcePath); err != nil {
+		return fmt.Errorf("validate backup source database: %w", err)
+	}
 	db, err := appdb.Open(ctx, dataDir)
 	if err != nil {
 		return err
@@ -311,7 +325,7 @@ func Restore(ctx context.Context, input, dataDir string, force bool) (err error)
 	if err := extractAndValidate(ctx, input, stage); err != nil {
 		return err
 	}
-	if err := validateStagedDatabase(ctx, filepath.Join(stage, databaseName)); err != nil {
+	if err := validateBlogDatabase(ctx, filepath.Join(stage, databaseName)); err != nil {
 		return err
 	}
 	if err := installStagedSite(stage, dataDir); err != nil {
@@ -401,18 +415,18 @@ func pathWithin(root, path string) bool {
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-func validateStagedDatabase(ctx context.Context, path string) error {
+func validateBlogDatabase(ctx context.Context, path string) error {
 	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?mode=ro")
 	if err != nil {
-		return fmt.Errorf("open restored database: %w", err)
+		return fmt.Errorf("open database read-only: %w", err)
 	}
 	defer db.Close()
 	var check string
 	if err := db.QueryRowContext(ctx, "PRAGMA quick_check").Scan(&check); err != nil {
-		return fmt.Errorf("check restored database: %w", err)
+		return fmt.Errorf("check database: %w", err)
 	}
 	if check != "ok" {
-		return fmt.Errorf("restored database quick_check failed: %s", check)
+		return fmt.Errorf("database quick_check failed: %s", check)
 	}
 	versions, err := fs.Glob(blogmigrations.Files, "*.sql")
 	if err != nil {
@@ -422,10 +436,10 @@ func validateStagedDatabase(ctx context.Context, path string) error {
 	for _, version := range versions {
 		var count int
 		if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version = ?", version).Scan(&count); err != nil {
-			return fmt.Errorf("check restored migration %s: %w", version, err)
+			return fmt.Errorf("check database migration %s: %w", version, err)
 		}
 		if count != 1 {
-			return fmt.Errorf("restored database is missing migration %s", version)
+			return fmt.Errorf("database is missing migration %s", version)
 		}
 	}
 	return nil

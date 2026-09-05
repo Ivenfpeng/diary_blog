@@ -116,6 +116,30 @@ func TestBackupRejectsOutputInsideMediaDirectory(t *testing.T) {
 	}
 }
 
+func TestBackupRejectsMissingSourceDatabase(t *testing.T) {
+	output := filepath.Join(t.TempDir(), "site.tar.gz")
+	if err := operations.Backup(context.Background(), filepath.Join(t.TempDir(), "missing"), output); err == nil {
+		t.Fatal("backup accepted a missing source database")
+	}
+	if _, err := os.Stat(output); !os.IsNotExist(err) {
+		t.Fatalf("backup archive exists after missing source error: %v", err)
+	}
+}
+
+func TestBackupRejectsInvalidSourceDatabase(t *testing.T) {
+	source := t.TempDir()
+	if err := os.WriteFile(filepath.Join(source, "blog.db"), []byte("not sqlite"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "site.tar.gz")
+	if err := operations.Backup(context.Background(), source, output); err == nil {
+		t.Fatal("backup accepted an invalid source database")
+	}
+	if _, err := os.Stat(output); !os.IsNotExist(err) {
+		t.Fatalf("backup archive exists after invalid source error: %v", err)
+	}
+}
+
 func TestRestoreRejectsArbitraryTopLevelEntry(t *testing.T) {
 	archive := writeTestArchive(t, testArchiveEntry{name: "unexpected.txt", body: []byte("no")})
 	err := operations.Restore(context.Background(), archive, filepath.Join(t.TempDir(), "restored"), false)
