@@ -1161,11 +1161,11 @@ git commit -m "feat: add Markdown authoring workflow"
 - Create: `admin/src/views/SettingsView.vue`
 - Test: `admin/src/views/MediaView.test.ts`
 
-- [ ] **Step 1: Write failing backend and frontend tests**
+- [x] **Step 1: Write failing backend and frontend tests**
 
 Backend tests cover unique slugs, referenced-category deletion rejection, media metadata, image type/size rejection, settings validation, and public settings cache invalidation. Frontend tests cover upload progress, alt-text requirement, and failed upload recovery.
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 Run:
 
@@ -1176,15 +1176,15 @@ npm --prefix admin test -- MediaView
 
 Expected: FAIL.
 
-- [ ] **Step 3: Implement safe media storage**
+- [x] **Step 3: Implement safe media storage**
 
 Accept JPEG, PNG, WebP, GIF, and AVIF. Limit request and decoded file size to 10 MiB, decode image metadata before acceptance, generate a random storage name, write to a temporary file, fsync, and rename into `/data/media/YYYY/MM`. Never use the original filename as a filesystem path.
 
-- [ ] **Step 4: Implement management APIs and views**
+- [x] **Step 4: Implement management APIs and views**
 
 Expose explicit taxonomy, media, and settings endpoints with authentication and CSRF. Build dense table/list views with edit dialogs, upload controls, image thumbnails, alt text, and validated site identity fields.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 

@@ -10,11 +10,11 @@
 
 当前分支：`codex/diary-blog-mvp`
 
-当前阶段：M3 Authoring Product
+当前阶段：M4 Operational Release
 
 总体状态：进行中
 
-最后登记：2026-09-05 09:46 CST
+最后登记：2026-09-05 22:00 CST
 
 ## 状态定义
 
@@ -32,8 +32,8 @@
 |---|---:|---|---|
 | M1 Core Foundation | Task 1-5 | 完成 | 数据库、Markdown、草稿、发布与搜索核心完成 |
 | M2 Public Product | Task 6-7 | 完成 | 公开页面、搜索、RSS、Sitemap 和 SEO 可用 |
-| M3 Authoring Product | Task 8-12 | 进行中 | 登录、管理 API、Vue 写作后台和媒体管理可用 |
-| M4 Operational Release | Task 13-16 | 未开始 | 运维、备份、容器部署和 E2E 验收通过 |
+| M3 Authoring Product | Task 8-12 | 完成 | 登录、管理 API、Vue 写作后台和媒体管理可用 |
+| M4 Operational Release | Task 13-16 | 进行中 | 运维、备份、容器部署和 E2E 验收通过 |
 
 ## 任务登记
 
@@ -50,8 +50,8 @@
 | 9 | 管理文章 API | 完成 | `36d66ad`, `9b413e3` | 一轮独立审查修复后通过；Go 全量、race、vet 与管理 API 契约测试通过 | create/get/list/autosave/preview/publish/archive/revisions/restore 已受会话与 CSRF 保护 |
 | 10 | Vue 后台框架与登录 | 完成 | `2dc1bc6`, `ebc09c8`, `d3d5500` | 独立审查通过；`npm --prefix admin test`、`npm --prefix admin run build` 通过 | 已修正 `/admin` base 路由与匿名 restore 后登录跳转 |
 | 11 | 文章列表与 Markdown 编辑器 | 完成 | `3b18f87`, `7c8cb32`, `3b9df88`, `7fa87a4` | 两轮独立审查修复后通过；`npm --prefix admin test`、`npm --prefix admin run build` 通过 | 已修正 Markdown 父级同步、发布校验与 destructive 操作期间未保存内容保护 |
-| 12 | 分类、媒体与站点设置 | 进行中 | - | 准备生成 Task brief 并进入管理后台/后端联动红绿循环 | - |
-| 13 | 日志、健康检查、缓存与停机 | 未开始 | - | - | - |
+| 12 | 分类、媒体与站点设置 | 完成 | `f857dca`, `2e37bc6`, `0f63e4b`, `d68ed8a`, `7710281`, `5ea64fb` | 四轮独立审查修复后通过；`go test ./...`、`go vet ./...`、`npm --prefix admin test`、`npm --prefix admin run build`、`git diff --check` 通过 | WebP 使用真实解码；AVIF 采用严格结构/属性/extent 校验而非像素级解码 |
+| 13 | 日志、健康检查、缓存与停机 | 进行中 | - | 准备进入 Task brief 与红绿循环 | - |
 | 14 | 备份、恢复、迁移与管理 CLI | 未开始 | - | - | - |
 | 15 | 生产构建与 Docker Compose | 未开始 | - | - | - |
 | 16 | E2E、响应式与发布门禁 | 未开始 | - | - | - |
@@ -68,6 +68,7 @@
 - 管理文章 JSON API 已完成，包含稳定错误 envelope、严格 JSON 解码、2 MiB body 限制、乐观锁冲突映射和显式 admin 路由。
 - Vue 管理后台基础 shell 已完成，包含 typed API client、会话恢复、路由守卫、登录表单、固定侧栏和移动抽屉。
 - 文章列表与 Markdown 编辑器已完成，包含 autosave 串行化、冲突态保护、CodeMirror 生命周期、预览、发布、归档和版本恢复。
+- 分类、标签、媒体库与站点设置已完成，包含 CSRF 管理端点、SQLite 全局 taxonomy slug trigger、10 MiB 媒体上传边界、WebP 解码校验、AVIF 结构校验、媒体 alt text 更新和管理视图 edit/delete 对话框。
 - 工作区仍包含 `.gitignore`、`.idea/`、`.metrics/` 用户改动；从本次起 `docs/progress/` 作为总控文档持续更新。
 
 ## 风险与偏差
@@ -80,6 +81,7 @@
 | R-004 | 中 | 已裁定 | v2 结构无法还原最后一次成功发布的完整元数据 | 迁移不自动创建公开快照；旧文章须显式重新发布，避免泄露草稿 |
 | R-005 | 中 | 已解决 | 配置 URL 含转义路径前缀时 RSS/Sitemap 可能重复编码 | 已统一 URL Path/RawPath 处理并通过专项审查 |
 | R-006 | 中 | 待后续 | Caddy 反向代理场景需显式配置可信代理 CIDR，否则登录限流会按直接 peer 计数 | Task 13/15 运维与部署配置阶段接入运行时配置 |
+| R-007 | 低 | 已裁定 | AVIF 上传校验当前验证 ISO-BMFF/AVIF 元数据、属性关联和数据 extent，不做 AV1 像素级解码 | Task 12 先采用严格结构门禁；若后续接入维护良好的 AVIF decoder，可替换为像素级验证 |
 
 ## 变更记录
 
@@ -98,9 +100,10 @@
 | 2026-09-04 16:32 CST | Task 9 经一轮审查修复通过；管理文章 API 完成，进入 Task 10。 |
 | 2026-09-04 16:47 CST | Task 10 独立审查通过；Vue 后台 shell 与登录完成，进入 Task 11。 |
 | 2026-09-05 09:46 CST | Task 11 经两轮审查修复通过；文章列表与 Markdown 编辑器完成，进入 Task 12。 |
+| 2026-09-05 22:00 CST | Task 12 经四轮审查修复通过；分类、媒体上传与站点设置完成，M3 完成并进入 Task 13。 |
 
 ## 下一跟进点
 
-1. 完成 Task 12：分类、标签、媒体上传与站点设置的后端 API 和管理视图。
-2. 通过独立审查后自动进入 Task 13 日志、健康检查、缓存与停机。
+1. 执行 Task 13：日志、健康检查、缓存与优雅停机。
+2. Task 13 通过独立审查后自动进入 Task 14 备份、恢复、迁移与管理 CLI。
 3. 后续每个 Task 在实现提交和独立审查后同步更新本总控文档。
