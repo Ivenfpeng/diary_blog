@@ -45,9 +45,7 @@ func TestBackupAndRestorePreservesSiteData(t *testing.T) {
 	if err := os.WriteFile(mediaPath, mediaBytes, 0o640); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
+	defer db.Close()
 
 	archive := filepath.Join(t.TempDir(), "site.tar.gz")
 	if err := operations.Backup(ctx, source, archive); err != nil {

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	appdb "github.com/Ivenfpeng/diary_blog/internal/database"
+	"modernc.org/sqlite"
 )
 
 const (
@@ -88,18 +89,45 @@ func Backup(ctx context.Context, dataDir, output string) (err error) {
 	return nil
 }
 
-// snapshotDatabase uses SQLite VACUUM INTO, which is a consistent online
-// snapshot supported by the bundled modernc SQLite driver.
+type onlineBackupConn interface {
+	NewBackup(string) (*sqlite.Backup, error)
+}
+
+// snapshotDatabase uses the driver's SQLite online-backup API to create a
+// transactionally consistent temporary database while the source remains open.
 func snapshotDatabase(ctx context.Context, dataDir, destination string) error {
 	db, err := appdb.Open(ctx, dataDir)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
-	if _, err := db.ExecContext(ctx, "VACUUM INTO ?", destination); err != nil {
-		return fmt.Errorf("create consistent SQLite snapshot: %w", err)
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire SQLite backup connection: %w", err)
 	}
-	return nil
+	defer conn.Close()
+	return conn.Raw(func(raw any) (result error) {
+		source, ok := raw.(onlineBackupConn)
+		if !ok {
+			return errors.New("SQLite driver connection does not support online backup")
+		}
+		backup, err := source.NewBackup(destination)
+		if err != nil {
+			return fmt.Errorf("start SQLite online backup: %w", err)
+		}
+		defer func() {
+			if finishErr := backup.Finish(); finishErr != nil && result == nil {
+				result = fmt.Errorf("finish SQLite online backup: %w", finishErr)
+			}
+		}()
+		for more := true; more; {
+			more, err = backup.Step(-1)
+			if err != nil {
+				return fmt.Errorf("copy SQLite online backup: %w", err)
+			}
+		}
+		return nil
+	})
 }
 
 func writeArchive(file *os.File, databasePath, mediaRoot string) error {
