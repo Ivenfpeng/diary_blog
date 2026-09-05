@@ -40,19 +40,15 @@ func (r *PostRepository) SaveSettings(ctx context.Context, value Settings, now t
 	if value.SiteTitle == "" || len(value.SiteTitle) > 120 || len(value.Description) > 500 || len(value.Author) > 120 {
 		return Settings{}, ErrValidation
 	}
-	if len(value.Navigation) == 0 {
-		value.Navigation = json.RawMessage("[]")
+	var valid bool
+	if value.Navigation, valid = normalizeJSONArray(value.Navigation); !valid {
+		return Settings{}, ErrValidation
 	}
-	if len(value.SocialLinks) == 0 {
-		value.SocialLinks = json.RawMessage("{}")
+	if value.SocialLinks, valid = normalizeJSONObject(value.SocialLinks); !valid {
+		return Settings{}, ErrValidation
 	}
-	if len(value.SEODefaults) == 0 {
-		value.SEODefaults = json.RawMessage("{}")
-	}
-	for _, raw := range []json.RawMessage{value.Navigation, value.SocialLinks, value.SEODefaults} {
-		if !json.Valid(raw) {
-			return Settings{}, ErrValidation
-		}
+	if value.SEODefaults, valid = normalizeJSONObject(value.SEODefaults); !valid {
+		return Settings{}, ErrValidation
 	}
 	_, err := r.db.ExecContext(ctx, "INSERT INTO site_settings (id, site_title, description, author, navigation_json, social_links_json, seo_defaults_json, updated_at) VALUES (1, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET site_title=excluded.site_title, description=excluded.description, author=excluded.author, navigation_json=excluded.navigation_json, social_links_json=excluded.social_links_json, seo_defaults_json=excluded.seo_defaults_json, updated_at=excluded.updated_at", value.SiteTitle, value.Description, value.Author, string(value.Navigation), string(value.SocialLinks), string(value.SEODefaults), formatTime(now))
 	if err != nil {
@@ -60,4 +56,26 @@ func (r *PostRepository) SaveSettings(ctx context.Context, value Settings, now t
 	}
 	value.UpdatedAt = now
 	return value, nil
+}
+
+func normalizeJSONArray(raw json.RawMessage) (json.RawMessage, bool) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return json.RawMessage("[]"), true
+	}
+	var value []json.RawMessage
+	if err := json.Unmarshal(raw, &value); err != nil || value == nil {
+		return nil, false
+	}
+	return raw, true
+}
+
+func normalizeJSONObject(raw json.RawMessage) (json.RawMessage, bool) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return json.RawMessage("{}"), true
+	}
+	var value map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &value); err != nil || value == nil {
+		return nil, false
+	}
+	return raw, true
 }

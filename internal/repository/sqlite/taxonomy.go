@@ -120,7 +120,7 @@ func (r *PostRepository) createTaxonomy(ctx context.Context, table, other string
 	}
 	result, err := r.db.ExecContext(ctx, "INSERT INTO "+table+" (name, slug, created_at, updated_at) VALUES (?, ?, ?, ?)", input.Name, input.Slug, formatTime(now), formatTime(now))
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if isTaxonomyDuplicate(err) {
 			return Taxonomy{}, ErrValidation
 		}
 		return Taxonomy{}, fmt.Errorf("create %s: %w", table, err)
@@ -152,7 +152,7 @@ func (r *PostRepository) updateTaxonomy(ctx context.Context, table, other string
 	}
 	result, err := r.db.ExecContext(ctx, "UPDATE "+table+" SET name = ?, slug = ?, updated_at = ? WHERE id = ?", input.Name, input.Slug, formatTime(now), id)
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if isTaxonomyDuplicate(err) {
 			return Taxonomy{}, ErrValidation
 		}
 		return Taxonomy{}, fmt.Errorf("update %s: %w", table, err)
@@ -162,6 +162,10 @@ func (r *PostRepository) updateTaxonomy(ctx context.Context, table, other string
 		return Taxonomy{}, ErrNotFound
 	}
 	return Taxonomy{ID: id, Name: input.Name, Slug: input.Slug, UpdatedAt: now}, nil
+}
+
+func isTaxonomyDuplicate(err error) bool {
+	return strings.Contains(err.Error(), "UNIQUE constraint failed") || strings.Contains(err.Error(), "taxonomy slug already exists")
 }
 func (r *PostRepository) deleteTaxonomy(ctx context.Context, table string, id int64) error {
 	result, err := r.db.ExecContext(ctx, "DELETE FROM "+table+" WHERE id = ?", id)

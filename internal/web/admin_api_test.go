@@ -250,10 +250,20 @@ func TestMediaManagementAPIRejectsOversizedUpload(t *testing.T) {
 	}
 }
 
+func TestMediaManagementAPIRejectsRequestLargerThanLimit(t *testing.T) {
+	server, _, session, csrf := newAdminServerWithMediaDir(t, t.TempDir())
+	response := multipartAdminRequest(t, server, session, csrf, "/api/admin/media", "near-limit.png", bytes.Repeat([]byte{'x'}, int(10*1024*1024-1024)), "Near limit")
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("over-limit request status = %d: %s", response.StatusCode, readBody(t, response))
+	}
+}
+
 func TestSettingsManagementAPIValidatesInput(t *testing.T) {
 	server, _, session, csrf := newAdminServer(t)
 	invalid := adminRequest(t, server, session, csrf, http.MethodPut, "/api/admin/settings", map[string]any{"site_title": "", "description": "Notes"})
 	assertAPIError(t, invalid, http.StatusBadRequest, "management_validation", "The management data is invalid.")
+	invalidShape := adminRequest(t, server, session, csrf, http.MethodPut, "/api/admin/settings", map[string]any{"site_title": "Diary", "navigation": map[string]string{"home": "/"}})
+	assertAPIError(t, invalidShape, http.StatusBadRequest, "management_validation", "The management data is invalid.")
 	saved := adminRequest(t, server, session, csrf, http.MethodPut, "/api/admin/settings", map[string]any{"site_title": "Diary", "description": "Notes", "author": "Iven"})
 	if saved.StatusCode != http.StatusOK {
 		t.Fatalf("save settings = %d: %s", saved.StatusCode, readBody(t, saved))

@@ -37,4 +37,17 @@ describe('MediaView', () => {
     expect(wrapper.get('[role="alert"]').text()).toBe('Upload failed')
     expect((wrapper.get('#media-file').element as HTMLInputElement).files?.[0]?.name).toBe('photo.png')
   })
+
+  it('updates alt text for an existing image', async () => {
+    vi.mocked(apiRequest)
+      .mockResolvedValueOnce({ media: [{ id: 7, path: '2026/09/photo.png', mime_type: 'image/png', width: 1, height: 1, size: 1, alt_text: 'Old text' }] })
+      .mockResolvedValueOnce({ media: { id: 7, path: '2026/09/photo.png', mime_type: 'image/png', width: 1, height: 1, size: 1, alt_text: 'New text' } })
+    const wrapper = mount(MediaView)
+    await flushPromises()
+    await wrapper.get('#media-alt-7').setValue('New text')
+    await wrapper.get('[data-testid="save-alt-7"]').trigger('click')
+    await flushPromises()
+    expect(apiRequest).toHaveBeenLastCalledWith('/api/admin/media/7', { method: 'PATCH', body: { alt_text: 'New text' } })
+    expect(wrapper.text()).toContain('New text')
+  })
 })

@@ -33,6 +33,18 @@ func TestTaxonomyRejectsDuplicateSlugsAndReferencedCategoryDeletion(t *testing.T
 	}
 }
 
+func TestTaxonomySlugInvariantCannotBeBypassedAtDatabaseLevel(t *testing.T) {
+	ctx := context.Background()
+	_, db := newPostRepository(t)
+	now := time.Date(2026, 9, 5, 10, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	if _, err := db.ExecContext(ctx, "INSERT INTO categories (name, slug, created_at, updated_at) VALUES (?, ?, ?, ?)", "Engineering", "engineering", now, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO tags (name, slug, created_at, updated_at) VALUES (?, ?, ?, ?)", "Engineering tag", "engineering", now, now); err == nil {
+		t.Fatal("cross-taxonomy duplicate slug bypassed the database invariant")
+	}
+}
+
 func TestMediaMetadataAndSettingsValidation(t *testing.T) {
 	ctx := context.Background()
 	repo, _ := newPostRepository(t)
@@ -49,6 +61,12 @@ func TestMediaMetadataAndSettingsValidation(t *testing.T) {
 	}
 	if _, err := repo.SaveSettings(ctx, sqliterepo.Settings{SiteTitle: "", Description: "desc"}, now); !errors.Is(err, sqliterepo.ErrValidation) {
 		t.Fatalf("invalid settings = %v, want validation", err)
+	}
+	if _, err := repo.SaveSettings(ctx, sqliterepo.Settings{SiteTitle: "Diary", Navigation: []byte(`{}`)}, now); !errors.Is(err, sqliterepo.ErrValidation) {
+		t.Fatalf("object navigation = %v, want validation", err)
+	}
+	if _, err := repo.SaveSettings(ctx, sqliterepo.Settings{SiteTitle: "Diary", SocialLinks: []byte(`[]`)}, now); !errors.Is(err, sqliterepo.ErrValidation) {
+		t.Fatalf("array social links = %v, want validation", err)
 	}
 	saved, err := repo.SaveSettings(ctx, sqliterepo.Settings{SiteTitle: "Diary", Description: "Notes", Author: "Iven"}, now)
 	if err != nil {

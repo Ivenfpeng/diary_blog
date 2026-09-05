@@ -60,8 +60,8 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
 		t.Fatal(err)
 	}
-	if migrationCount != 6 {
-		t.Fatalf("migration count = %d, want 6", migrationCount)
+	if migrationCount != 7 {
+		t.Fatalf("migration count = %d, want 7", migrationCount)
 	}
 	var singletonIndexCount int
 	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_admins_singleton'").Scan(&singletonIndexCount); err != nil {

@@ -2,6 +2,7 @@ package web
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -201,7 +202,7 @@ func (a *adminManagementAPI) uploadMedia(w http.ResponseWriter, r *http.Request)
 		writeAPIError(w, r, http.StatusServiceUnavailable, "media_unavailable", "Media storage is not configured.")
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, adminMediaBodyLimit+1024*1024)
+	r.Body = http.MaxBytesReader(w, r.Body, adminMediaBodyLimit)
 	if err := r.ParseMultipartForm(adminMediaBodyLimit); err != nil {
 		writeAPIError(w, r, http.StatusBadRequest, "media_validation", "The uploaded image is invalid.")
 		return
@@ -350,29 +351,131 @@ func mediaExtension(mime string) string {
 	return ""
 }
 func webPSize(b []byte) (int, int, bool) {
-	if len(b) < 30 || string(b[:4]) != "RIFF" || string(b[8:12]) != "WEBP" {
+	if len(b) < 20 || string(b[:4]) != "RIFF" || string(b[8:12]) != "WEBP" || int(binary.LittleEndian.Uint32(b[4:8])) != len(b)-8 {
 		return 0, 0, false
 	}
-	switch string(b[12:16]) {
-	case "VP8X":
-		return (int(b[24]) | int(b[25])<<8 | int(b[26])<<16) + 1, (int(b[27]) | int(b[28])<<8 | int(b[29])<<16) + 1, true
-	case "VP8 ":
-		if len(b) >= 30 {
-			return int(b[26]) | int(b[27]&63)<<8, int(b[28]) | int(b[29]&63)<<8, true
+	var width, height int
+	imageChunk := false
+	for offset := 12; offset < len(b); {
+		if offset+8 > len(b) {
+			return 0, 0, false
 		}
-	case "VP8L":
-		if len(b) >= 25 {
-			v := uint32(b[21]) | uint32(b[22])<<8 | uint32(b[23])<<16 | uint32(b[24])<<24
-			return int(v&0x3fff) + 1, int((v>>14)&0x3fff) + 1, true
+		chunkType := string(b[offset : offset+4])
+		size := int(binary.LittleEndian.Uint32(b[offset+4 : offset+8]))
+		start, end := offset+8, offset+8+size
+		if size < 0 || end > len(b) {
+			return 0, 0, false
+		}
+		data := b[start:end]
+		switch chunkType {
+		case "VP8X":
+			if len(data) != 10 || data[1] != 0 || data[2] != 0 {
+				return 0, 0, false
+			}
+			width = int(data[4]) | int(data[5])<<8 | int(data[6])<<16
+			width++
+			height = int(data[7]) | int(data[8])<<8 | int(data[9])<<16
+			height++
+		case "VP8 ":
+			if len(data) < 10 || string(data[3:6]) != "\x9d\x01\x2a" {
+				return 0, 0, false
+			}
+			width, height = int(binary.LittleEndian.Uint16(data[6:8])&0x3fff), int(binary.LittleEndian.Uint16(data[8:10])&0x3fff)
+			imageChunk = true
+		case "VP8L":
+			if len(data) < 5 || data[0] != 0x2f {
+				return 0, 0, false
+			}
+			value := binary.LittleEndian.Uint32(data[1:5])
+			width, height = int(value&0x3fff)+1, int((value>>14)&0x3fff)+1
+			imageChunk = true
+		case "ANMF":
+			if len(data) < 16 {
+				return 0, 0, false
+			}
+			imageChunk = true
+		}
+		offset = end
+		if size%2 == 1 {
+			offset++
 		}
 	}
-	return 0, 0, false
+	return width, height, imageChunk && width > 0 && height > 0
 }
+
 func avifSize(b []byte) (int, int, bool) {
-	for i := 0; i+20 <= len(b); i++ {
-		if string(b[i+4:i+8]) == "ispe" {
-			return int(uint32(b[i+12])<<24 | uint32(b[i+13])<<16 | uint32(b[i+14])<<8 | uint32(b[i+15])), int(uint32(b[i+16])<<24 | uint32(b[i+17])<<16 | uint32(b[i+18])<<8 | uint32(b[i+19])), true
+	if len(b) < 24 || string(b[4:8]) != "ftyp" {
+		return 0, 0, false
+	}
+	ftypSize := int(binary.BigEndian.Uint32(b[:4]))
+	if ftypSize < 16 || ftypSize > len(b) || !avifBrand(b[8:ftypSize]) {
+		return 0, 0, false
+	}
+	var meta, iprp, ipco, hdlr, pitm, iinf, iloc, ispe bool
+	var width, height int
+	var walk func(int, int, int) bool
+	walk = func(start, end, depth int) bool {
+		if depth > 8 {
+			return false
+		}
+		for offset := start; offset < end; {
+			if offset+8 > end {
+				return false
+			}
+			size := int(binary.BigEndian.Uint32(b[offset : offset+4]))
+			if size < 8 || offset+size > end {
+				return false
+			}
+			kind, payloadStart, payloadEnd := string(b[offset+4:offset+8]), offset+8, offset+size
+			switch kind {
+			case "meta":
+				meta = true
+				if payloadStart+4 > payloadEnd || !walk(payloadStart+4, payloadEnd, depth+1) {
+					return false
+				}
+			case "iprp":
+				iprp = true
+				if !walk(payloadStart, payloadEnd, depth+1) {
+					return false
+				}
+			case "ipco":
+				ipco = true
+				if !walk(payloadStart, payloadEnd, depth+1) {
+					return false
+				}
+			case "hdlr":
+				hdlr = true
+			case "pitm":
+				pitm = true
+			case "iinf":
+				iinf = true
+			case "iloc":
+				iloc = true
+			case "ispe":
+				if payloadStart+12 > payloadEnd {
+					return false
+				}
+				width, height = int(binary.BigEndian.Uint32(b[payloadStart+4:payloadStart+8])), int(binary.BigEndian.Uint32(b[payloadStart+8:payloadStart+12]))
+				ispe = width > 0 && height > 0
+			}
+			offset += size
+		}
+		return true
+	}
+	if !walk(0, len(b), 0) {
+		return 0, 0, false
+	}
+	return width, height, meta && iprp && ipco && hdlr && pitm && iinf && iloc && ispe
+}
+
+func avifBrand(ftyp []byte) bool {
+	if len(ftyp) < 8 {
+		return false
+	}
+	for offset := 0; offset+4 <= len(ftyp); offset += 4 {
+		if brand := string(ftyp[offset : offset+4]); brand == "avif" || brand == "avis" {
+			return true
 		}
 	}
-	return 0, 0, false
+	return false
 }
