@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/Ivenfpeng/diary_blog/internal/repository/sqlite"
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/image/webp"
 )
 
 const adminMediaBodyLimit int64 = 10 * 1024 * 1024
@@ -351,135 +353,546 @@ func mediaExtension(mime string) string {
 	return ""
 }
 func webPSize(b []byte) (int, int, bool) {
-	if len(b) < 20 || string(b[:4]) != "RIFF" || string(b[8:12]) != "WEBP" || int(binary.LittleEndian.Uint32(b[4:8])) != len(b)-8 {
+	if len(b) < 20 || string(b[:4]) != "RIFF" || string(b[8:12]) != "WEBP" || uint64(binary.LittleEndian.Uint32(b[4:8]))+8 != uint64(len(b)) {
 		return 0, 0, false
 	}
-	var width, height int
-	imageChunk := false
-	for offset := 12; offset < len(b); {
-		if offset+8 > len(b) {
-			return 0, 0, false
-		}
-		chunkType := string(b[offset : offset+4])
-		size := int(binary.LittleEndian.Uint32(b[offset+4 : offset+8]))
-		start, end := offset+8, offset+8+size
-		if size < 0 || end > len(b) {
-			return 0, 0, false
-		}
-		data := b[start:end]
-		switch chunkType {
-		case "VP8X":
-			if len(data) != 10 || data[1] != 0 || data[2] != 0 {
-				return 0, 0, false
-			}
-			width = int(data[4]) | int(data[5])<<8 | int(data[6])<<16
-			width++
-			height = int(data[7]) | int(data[8])<<8 | int(data[9])<<16
-			height++
-		case "VP8 ":
-			if len(data) <= 10 || string(data[3:6]) != "\x9d\x01\x2a" {
-				return 0, 0, false
-			}
-			width, height = int(binary.LittleEndian.Uint16(data[6:8])&0x3fff), int(binary.LittleEndian.Uint16(data[8:10])&0x3fff)
-			imageChunk = true
-		case "VP8L":
-			if len(data) <= 5 || data[0] != 0x2f {
-				return 0, 0, false
-			}
-			value := binary.LittleEndian.Uint32(data[1:5])
-			width, height = int(value&0x3fff)+1, int((value>>14)&0x3fff)+1
-			imageChunk = true
-		case "ANMF":
-			if len(data) <= 16 {
-				return 0, 0, false
-			}
-			imageChunk = true
-		}
-		offset = end
-		if size%2 == 1 {
-			offset++
-		}
+	config, err := webp.DecodeConfig(bytes.NewReader(b))
+	if err != nil || config.Width < 1 || config.Height < 1 || int64(config.Width)*int64(config.Height) > adminMediaBodyLimit/4 {
+		return 0, 0, false
 	}
-	return width, height, imageChunk && width > 0 && height > 0
+	decoded, err := webp.Decode(bytes.NewReader(b))
+	if err != nil {
+		return 0, 0, false
+	}
+	width, height := decoded.Bounds().Dx(), decoded.Bounds().Dy()
+	return width, height, width == config.Width && height == config.Height
 }
 
 func avifSize(b []byte) (int, int, bool) {
-	if len(b) < 24 || string(b[4:8]) != "ftyp" {
+	topLevel, ok := avifBoxes(b, 0, len(b))
+	if !ok || len(topLevel) == 0 || topLevel[0].kind != "ftyp" || !avifBrand(b[topLevel[0].payloadStart:topLevel[0].end]) {
 		return 0, 0, false
 	}
-	ftypSize := int(binary.BigEndian.Uint32(b[:4]))
-	if ftypSize < 16 || ftypSize > len(b) || !avifBrand(b[8:ftypSize]) {
+
+	var meta avifBox
+	var mediaData []avifByteRange
+	for _, box := range topLevel {
+		switch box.kind {
+		case "meta":
+			if meta.kind != "" {
+				return 0, 0, false
+			}
+			meta = box
+		case "mdat":
+			mediaData = append(mediaData, avifByteRange{start: uint64(box.payloadStart), end: uint64(box.end)})
+		}
+	}
+	if meta.kind == "" {
 		return 0, 0, false
 	}
-	var meta, iprp, ipco, hdlr, pitm, iinf, iloc, ipma, mdat, ispe, av1C bool
+	metaVersion, metaFlags, metaContent, ok := avifFullBox(b, meta)
+	if !ok || metaVersion != 0 || metaFlags != 0 {
+		return 0, 0, false
+	}
+	children, ok := avifBoxes(b, metaContent, meta.end)
+	if !ok {
+		return 0, 0, false
+	}
+
+	var handlerOK bool
+	var primaryItemID uint32
+	var havePrimaryItem bool
+	var itemTypes map[uint32]string
+	var locationBox avifBox
+	var properties map[uint32]avifProperty
+	var associations map[uint32]map[uint32]bool
+	var itemData []avifByteRange
+	for _, box := range children {
+		switch box.kind {
+		case "hdlr":
+			if handlerOK || !avifPictureHandler(b, box) {
+				return 0, 0, false
+			}
+			handlerOK = true
+		case "pitm":
+			if havePrimaryItem {
+				return 0, 0, false
+			}
+			primaryItemID, ok = avifPrimaryItem(b, box)
+			if !ok {
+				return 0, 0, false
+			}
+			havePrimaryItem = true
+		case "iinf":
+			if itemTypes != nil {
+				return 0, 0, false
+			}
+			itemTypes, ok = avifItemTypes(b, box)
+			if !ok {
+				return 0, 0, false
+			}
+		case "iloc":
+			if locationBox.kind != "" {
+				return 0, 0, false
+			}
+			locationBox = box
+		case "iprp":
+			if properties != nil {
+				return 0, 0, false
+			}
+			properties, associations, ok = avifItemProperties(b, box)
+			if !ok {
+				return 0, 0, false
+			}
+		case "idat":
+			itemData = append(itemData, avifByteRange{start: uint64(box.payloadStart), end: uint64(box.end)})
+		}
+	}
+	if !handlerOK || !havePrimaryItem || itemTypes[primaryItemID] != "av01" || locationBox.kind == "" || properties == nil {
+		return 0, 0, false
+	}
+
 	var width, height int
-	var walk func(int, int, int) bool
-	walk = func(start, end, depth int) bool {
-		if depth > 8 {
-			return false
+	var haveSpatialExtents, haveAV1Config bool
+	for propertyIndex := range associations[primaryItemID] {
+		property, exists := properties[propertyIndex]
+		if !exists {
+			return 0, 0, false
 		}
-		for offset := start; offset < end; {
-			if offset+8 > end {
-				return false
+		switch property.kind {
+		case "ispe":
+			if !haveSpatialExtents {
+				width, height = property.width, property.height
 			}
-			size := int(binary.BigEndian.Uint32(b[offset : offset+4]))
-			if size < 8 || offset+size > end {
-				return false
-			}
-			kind, payloadStart, payloadEnd := string(b[offset+4:offset+8]), offset+8, offset+size
-			switch kind {
-			case "meta":
-				meta = true
-				if payloadStart+4 > payloadEnd || !walk(payloadStart+4, payloadEnd, depth+1) {
-					return false
-				}
-			case "iprp":
-				iprp = true
-				if !walk(payloadStart, payloadEnd, depth+1) {
-					return false
-				}
-			case "ipco":
-				ipco = true
-				if !walk(payloadStart, payloadEnd, depth+1) {
-					return false
-				}
-			case "hdlr":
-				hdlr = payloadEnd-payloadStart >= 20 && string(b[payloadStart+8:payloadStart+12]) == "pict"
-			case "pitm":
-				pitm = payloadEnd-payloadStart >= 6
-			case "iinf":
-				iinf = payloadEnd-payloadStart >= 6
-			case "iloc":
-				iloc = payloadEnd-payloadStart >= 10
-			case "ipma":
-				ipma = payloadEnd-payloadStart >= 12
-			case "av1C":
-				av1C = payloadEnd-payloadStart >= 4 && b[payloadStart]&0x80 != 0
-			case "mdat":
-				mdat = payloadEnd > payloadStart
-			case "ispe":
-				if payloadStart+12 > payloadEnd {
-					return false
-				}
-				width, height = int(binary.BigEndian.Uint32(b[payloadStart+4:payloadStart+8])), int(binary.BigEndian.Uint32(b[payloadStart+8:payloadStart+12]))
-				ispe = width > 0 && height > 0
-			}
-			offset += size
+			haveSpatialExtents = true
+		case "av1C":
+			haveAV1Config = true
 		}
-		return true
 	}
-	if !walk(0, len(b), 0) {
+	if !haveSpatialExtents || !haveAV1Config || !avifPrimaryItemHasData(b, locationBox, primaryItemID, mediaData, itemData) {
 		return 0, 0, false
 	}
-	return width, height, meta && iprp && ipco && hdlr && pitm && iinf && iloc && ipma && mdat && ispe && av1C
+	return width, height, true
 }
 
 func avifBrand(ftyp []byte) bool {
 	if len(ftyp) < 8 {
 		return false
 	}
-	for offset := 0; offset+4 <= len(ftyp); offset += 4 {
+	if brand := string(ftyp[:4]); brand == "avif" || brand == "avis" {
+		return true
+	}
+	for offset := 8; offset+4 <= len(ftyp); offset += 4 {
 		if brand := string(ftyp[offset : offset+4]); brand == "avif" || brand == "avis" {
+			return true
+		}
+	}
+	return false
+}
+
+type avifBox struct {
+	kind         string
+	start        int
+	payloadStart int
+	end          int
+}
+
+type avifByteRange struct {
+	start uint64
+	end   uint64
+}
+
+type avifProperty struct {
+	kind   string
+	width  int
+	height int
+}
+
+func avifBoxes(b []byte, start, end int) ([]avifBox, bool) {
+	if start < 0 || end < start || end > len(b) {
+		return nil, false
+	}
+	var boxes []avifBox
+	for offset := start; offset < end; {
+		if end-offset < 8 {
+			return nil, false
+		}
+		size := uint64(binary.BigEndian.Uint32(b[offset : offset+4]))
+		headerSize := 8
+		if size == 1 {
+			if end-offset < 16 {
+				return nil, false
+			}
+			size = binary.BigEndian.Uint64(b[offset+8 : offset+16])
+			headerSize = 16
+		} else if size == 0 {
+			size = uint64(end - offset)
+		}
+		if size < uint64(headerSize) || size > uint64(end-offset) {
+			return nil, false
+		}
+		boxEnd := offset + int(size)
+		boxes = append(boxes, avifBox{
+			kind:         string(b[offset+4 : offset+8]),
+			start:        offset,
+			payloadStart: offset + headerSize,
+			end:          boxEnd,
+		})
+		offset = boxEnd
+	}
+	return boxes, true
+}
+
+func avifFullBox(b []byte, box avifBox) (byte, uint32, int, bool) {
+	if box.payloadStart < 0 || box.end-box.payloadStart < 4 || box.end > len(b) {
+		return 0, 0, 0, false
+	}
+	flags := uint32(b[box.payloadStart+1])<<16 | uint32(b[box.payloadStart+2])<<8 | uint32(b[box.payloadStart+3])
+	return b[box.payloadStart], flags, box.payloadStart + 4, true
+}
+
+func avifPictureHandler(b []byte, box avifBox) bool {
+	version, flags, content, ok := avifFullBox(b, box)
+	return ok && version == 0 && flags == 0 && box.end-content >= 8 && string(b[content+4:content+8]) == "pict"
+}
+
+func avifPrimaryItem(b []byte, box avifBox) (uint32, bool) {
+	version, flags, content, ok := avifFullBox(b, box)
+	if !ok || flags != 0 {
+		return 0, false
+	}
+	switch version {
+	case 0:
+		if box.end-content < 2 {
+			return 0, false
+		}
+		return uint32(binary.BigEndian.Uint16(b[content : content+2])), true
+	case 1:
+		if box.end-content < 4 {
+			return 0, false
+		}
+		return binary.BigEndian.Uint32(b[content : content+4]), true
+	default:
+		return 0, false
+	}
+}
+
+func avifItemTypes(b []byte, box avifBox) (map[uint32]string, bool) {
+	version, flags, content, ok := avifFullBox(b, box)
+	if !ok || flags != 0 {
+		return nil, false
+	}
+	var entryCount uint32
+	switch version {
+	case 0:
+		if box.end-content < 2 {
+			return nil, false
+		}
+		entryCount = uint32(binary.BigEndian.Uint16(b[content : content+2]))
+		content += 2
+	case 1:
+		if box.end-content < 4 {
+			return nil, false
+		}
+		entryCount = binary.BigEndian.Uint32(b[content : content+4])
+		content += 4
+	default:
+		return nil, false
+	}
+	entries, ok := avifBoxes(b, content, box.end)
+	if !ok || uint64(entryCount) != uint64(len(entries)) {
+		return nil, false
+	}
+	items := make(map[uint32]string, len(entries))
+	for _, entry := range entries {
+		if entry.kind != "infe" {
+			return nil, false
+		}
+		itemID, itemType, ok := avifItemInfoEntry(b, entry)
+		if !ok {
+			return nil, false
+		}
+		if _, duplicate := items[itemID]; duplicate {
+			return nil, false
+		}
+		items[itemID] = itemType
+	}
+	return items, true
+}
+
+func avifItemInfoEntry(b []byte, box avifBox) (uint32, string, bool) {
+	version, flags, content, ok := avifFullBox(b, box)
+	if !ok || flags != 0 {
+		return 0, "", false
+	}
+	switch version {
+	case 2:
+		if box.end-content < 8 {
+			return 0, "", false
+		}
+		return uint32(binary.BigEndian.Uint16(b[content : content+2])), string(b[content+4 : content+8]), true
+	case 3:
+		if box.end-content < 10 {
+			return 0, "", false
+		}
+		return binary.BigEndian.Uint32(b[content : content+4]), string(b[content+6 : content+10]), true
+	default:
+		return 0, "", false
+	}
+}
+
+func avifItemProperties(b []byte, box avifBox) (map[uint32]avifProperty, map[uint32]map[uint32]bool, bool) {
+	children, ok := avifBoxes(b, box.payloadStart, box.end)
+	if !ok {
+		return nil, nil, false
+	}
+	var properties map[uint32]avifProperty
+	associations := make(map[uint32]map[uint32]bool)
+	for _, child := range children {
+		switch child.kind {
+		case "ipco":
+			if properties != nil {
+				return nil, nil, false
+			}
+			properties, ok = avifPropertyContainer(b, child)
+		case "ipma":
+			ok = avifPropertyAssociations(b, child, associations)
+		default:
+			ok = true
+		}
+		if !ok {
+			return nil, nil, false
+		}
+	}
+	if properties == nil || len(associations) == 0 {
+		return nil, nil, false
+	}
+	for _, indexes := range associations {
+		for index := range indexes {
+			if index == 0 || properties[index].kind == "" {
+				return nil, nil, false
+			}
+		}
+	}
+	return properties, associations, true
+}
+
+func avifPropertyContainer(b []byte, box avifBox) (map[uint32]avifProperty, bool) {
+	children, ok := avifBoxes(b, box.payloadStart, box.end)
+	if !ok || len(children) == 0 {
+		return nil, false
+	}
+	properties := make(map[uint32]avifProperty, len(children))
+	for index, child := range children {
+		property := avifProperty{kind: child.kind}
+		switch child.kind {
+		case "ispe":
+			version, flags, content, ok := avifFullBox(b, child)
+			if !ok || version != 0 || flags != 0 || child.end-content < 8 {
+				return nil, false
+			}
+			property.width = int(binary.BigEndian.Uint32(b[content : content+4]))
+			property.height = int(binary.BigEndian.Uint32(b[content+4 : content+8]))
+			if property.width == 0 || property.height == 0 {
+				return nil, false
+			}
+		case "av1C":
+			if child.end-child.payloadStart < 4 || b[child.payloadStart] != 0x81 {
+				return nil, false
+			}
+		}
+		properties[uint32(index+1)] = property
+	}
+	return properties, true
+}
+
+func avifPropertyAssociations(b []byte, box avifBox, associations map[uint32]map[uint32]bool) bool {
+	version, flags, content, ok := avifFullBox(b, box)
+	if !ok || version > 1 || flags&^uint32(1) != 0 || box.end-content < 4 {
+		return false
+	}
+	entryCount := binary.BigEndian.Uint32(b[content : content+4])
+	content += 4
+	for entry := uint32(0); entry < entryCount; entry++ {
+		var itemID uint32
+		if version == 0 {
+			if box.end-content < 2 {
+				return false
+			}
+			itemID = uint32(binary.BigEndian.Uint16(b[content : content+2]))
+			content += 2
+		} else {
+			if box.end-content < 4 {
+				return false
+			}
+			itemID = binary.BigEndian.Uint32(b[content : content+4])
+			content += 4
+		}
+		if box.end-content < 1 {
+			return false
+		}
+		associationCount := int(b[content])
+		content++
+		if associations[itemID] == nil {
+			associations[itemID] = make(map[uint32]bool, associationCount)
+		}
+		for association := 0; association < associationCount; association++ {
+			var propertyIndex uint32
+			if flags&1 != 0 {
+				if box.end-content < 2 {
+					return false
+				}
+				propertyIndex = uint32(binary.BigEndian.Uint16(b[content:content+2]) & 0x7fff)
+				content += 2
+			} else {
+				if box.end-content < 1 {
+					return false
+				}
+				propertyIndex = uint32(b[content] & 0x7f)
+				content++
+			}
+			associations[itemID][propertyIndex] = true
+		}
+	}
+	return content == box.end
+}
+
+func avifPrimaryItemHasData(b []byte, box avifBox, primaryItemID uint32, mediaData, itemData []avifByteRange) bool {
+	version, flags, content, ok := avifFullBox(b, box)
+	if !ok || version > 2 || flags != 0 || box.end-content < 2 {
+		return false
+	}
+	offsetSize := int(b[content] >> 4)
+	lengthSize := int(b[content] & 0x0f)
+	baseOffsetSize := int(b[content+1] >> 4)
+	indexSize := int(b[content+1] & 0x0f)
+	content += 2
+	if offsetSize > 8 || lengthSize > 8 || baseOffsetSize > 8 || indexSize > 8 || (version == 0 && indexSize != 0) {
+		return false
+	}
+	var itemCount uint32
+	if version < 2 {
+		if box.end-content < 2 {
+			return false
+		}
+		itemCount = uint32(binary.BigEndian.Uint16(b[content : content+2]))
+		content += 2
+	} else {
+		if box.end-content < 4 {
+			return false
+		}
+		itemCount = binary.BigEndian.Uint32(b[content : content+4])
+		content += 4
+	}
+	foundPrimary := false
+	for item := uint32(0); item < itemCount; item++ {
+		var itemID uint32
+		if version < 2 {
+			if box.end-content < 2 {
+				return false
+			}
+			itemID = uint32(binary.BigEndian.Uint16(b[content : content+2]))
+			content += 2
+		} else {
+			if box.end-content < 4 {
+				return false
+			}
+			itemID = binary.BigEndian.Uint32(b[content : content+4])
+			content += 4
+		}
+		constructionMethod := uint16(0)
+		if version == 1 || version == 2 {
+			if box.end-content < 2 {
+				return false
+			}
+			methodField := binary.BigEndian.Uint16(b[content : content+2])
+			if methodField&0xfff0 != 0 {
+				return false
+			}
+			constructionMethod = methodField & 0x000f
+			content += 2
+		}
+		if box.end-content < 2 {
+			return false
+		}
+		dataReferenceIndex := binary.BigEndian.Uint16(b[content : content+2])
+		content += 2
+		baseOffset, next, ok := avifVariableUint(b, content, box.end, baseOffsetSize)
+		if !ok {
+			return false
+		}
+		content = next
+		if box.end-content < 2 {
+			return false
+		}
+		extentCount := int(binary.BigEndian.Uint16(b[content : content+2]))
+		content += 2
+		isPrimary := itemID == primaryItemID
+		if isPrimary && (foundPrimary || dataReferenceIndex != 0 || extentCount == 0 || lengthSize == 0 || constructionMethod > 1) {
+			return false
+		}
+		for extent := 0; extent < extentCount; extent++ {
+			if (version == 1 || version == 2) && indexSize > 0 {
+				_, content, ok = avifVariableUint(b, content, box.end, indexSize)
+				if !ok {
+					return false
+				}
+			}
+			extentOffset, next, ok := avifVariableUint(b, content, box.end, offsetSize)
+			if !ok {
+				return false
+			}
+			content = next
+			extentLength, next, ok := avifVariableUint(b, content, box.end, lengthSize)
+			if !ok {
+				return false
+			}
+			content = next
+			if !isPrimary {
+				continue
+			}
+			start := baseOffset + extentOffset
+			if start < baseOffset || extentLength == 0 || !avifExtentInData(start, extentLength, constructionMethod, mediaData, itemData) {
+				return false
+			}
+		}
+		if isPrimary {
+			foundPrimary = true
+		}
+	}
+	return foundPrimary && content == box.end
+}
+
+func avifVariableUint(b []byte, start, end, size int) (uint64, int, bool) {
+	if size < 0 || size > 8 || start < 0 || end-start < size || end > len(b) {
+		return 0, start, false
+	}
+	var value uint64
+	for _, part := range b[start : start+size] {
+		value = value<<8 | uint64(part)
+	}
+	return value, start + size, true
+}
+
+func avifExtentInData(start, length uint64, constructionMethod uint16, mediaData, itemData []avifByteRange) bool {
+	end := start + length
+	if end < start {
+		return false
+	}
+	ranges := mediaData
+	if constructionMethod == 1 {
+		ranges = itemData
+		startOffset, endOffset := start, end
+		for _, dataRange := range ranges {
+			available := dataRange.end - dataRange.start
+			if startOffset <= available && endOffset <= available {
+				return true
+			}
+		}
+		return false
+	}
+	for _, dataRange := range ranges {
+		if start >= dataRange.start && end <= dataRange.end {
 			return true
 		}
 	}
