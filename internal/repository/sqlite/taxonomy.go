@@ -104,7 +104,14 @@ func (r *PostRepository) createTaxonomy(ctx context.Context, table, other string
 	if input, err = cleanTaxonomy(input); err != nil {
 		return Taxonomy{}, err
 	}
-	used, err := r.slugInUse(ctx, other, 0, input.Slug)
+	used, err := r.slugInUse(ctx, table, 0, input.Slug)
+	if err != nil {
+		return Taxonomy{}, err
+	}
+	if used {
+		return Taxonomy{}, ErrValidation
+	}
+	used, err = r.slugInUse(ctx, other, 0, input.Slug)
 	if err != nil {
 		return Taxonomy{}, err
 	}
@@ -113,6 +120,9 @@ func (r *PostRepository) createTaxonomy(ctx context.Context, table, other string
 	}
 	result, err := r.db.ExecContext(ctx, "INSERT INTO "+table+" (name, slug, created_at, updated_at) VALUES (?, ?, ?, ?)", input.Name, input.Slug, formatTime(now), formatTime(now))
 	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return Taxonomy{}, ErrValidation
+		}
 		return Taxonomy{}, fmt.Errorf("create %s: %w", table, err)
 	}
 	id, _ := result.LastInsertId()
@@ -126,7 +136,14 @@ func (r *PostRepository) updateTaxonomy(ctx context.Context, table, other string
 	if input, err = cleanTaxonomy(input); err != nil {
 		return Taxonomy{}, err
 	}
-	used, err := r.slugInUse(ctx, other, id, input.Slug)
+	used, err := r.slugInUse(ctx, table, id, input.Slug)
+	if err != nil {
+		return Taxonomy{}, err
+	}
+	if used {
+		return Taxonomy{}, ErrValidation
+	}
+	used, err = r.slugInUse(ctx, other, id, input.Slug)
 	if err != nil {
 		return Taxonomy{}, err
 	}
@@ -135,6 +152,9 @@ func (r *PostRepository) updateTaxonomy(ctx context.Context, table, other string
 	}
 	result, err := r.db.ExecContext(ctx, "UPDATE "+table+" SET name = ?, slug = ?, updated_at = ? WHERE id = ?", input.Name, input.Slug, formatTime(now), id)
 	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return Taxonomy{}, ErrValidation
+		}
 		return Taxonomy{}, fmt.Errorf("update %s: %w", table, err)
 	}
 	n, _ := result.RowsAffected()

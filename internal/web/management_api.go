@@ -218,7 +218,7 @@ func (a *adminManagementAPI) uploadMedia(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	now := a.clock().UTC()
-	relativeDir := filepath.Join("media", now.Format("2006"), now.Format("01"))
+	relativeDir := filepath.Join(now.Format("2006"), now.Format("01"))
 	dir := filepath.Join(a.mediaDir, relativeDir)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		a.writeError(w, r, err)

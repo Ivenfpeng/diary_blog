@@ -5,8 +5,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"image"
+	"image/color"
+	"image/png"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -195,7 +200,71 @@ func TestAdminPostAPIRejectsMissingParentResources(t *testing.T) {
 	}
 }
 
+func TestTaxonomyManagementAPIRejectsSameTableDuplicateSlug(t *testing.T) {
+	server, _, session, csrf := newAdminServer(t)
+	first := adminRequest(t, server, session, csrf, http.MethodPost, "/api/admin/categories", map[string]any{"name": "Engineering", "slug": "engineering"})
+	if first.StatusCode != http.StatusCreated {
+		t.Fatalf("create category = %d: %s", first.StatusCode, readBody(t, first))
+	}
+	firstCategory := decodeObject(t, first)["category"].(map[string]any)
+	duplicate := adminRequest(t, server, session, csrf, http.MethodPost, "/api/admin/categories", map[string]any{"name": "Again", "slug": "engineering"})
+	assertAPIError(t, duplicate, http.StatusBadRequest, "management_validation", "The management data is invalid.")
+
+	second := adminRequest(t, server, session, csrf, http.MethodPost, "/api/admin/categories", map[string]any{"name": "Writing", "slug": "writing"})
+	if second.StatusCode != http.StatusCreated {
+		t.Fatalf("create second category = %d: %s", second.StatusCode, readBody(t, second))
+	}
+	secondCategory := decodeObject(t, second)["category"].(map[string]any)
+	update := adminRequest(t, server, session, csrf, http.MethodPut, "/api/admin/categories/"+strconv.Itoa(int(secondCategory["id"].(float64))), map[string]any{"name": "Writing", "slug": firstCategory["slug"]})
+	assertAPIError(t, update, http.StatusBadRequest, "management_validation", "The management data is invalid.")
+}
+
+func TestMediaManagementAPIStoresValidatedUploadInConfiguredDirectory(t *testing.T) {
+	mediaDir := t.TempDir()
+	server, _, session, csrf := newAdminServerWithMediaDir(t, mediaDir)
+	response := multipartAdminRequest(t, server, session, csrf, "/api/admin/media", "image.png", tinyPNG(t), "A green pixel")
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("upload status = %d: %s", response.StatusCode, readBody(t, response))
+	}
+	media := decodeObject(t, response)["media"].(map[string]any)
+	path := media["path"].(string)
+	if !strings.HasPrefix(path, "2026/09/") || strings.Contains(path, "media/") {
+		t.Fatalf("media path = %q, want public relative year/month path", path)
+	}
+	if _, err := os.Stat(filepath.Join(mediaDir, filepath.FromSlash(path))); err != nil {
+		t.Fatalf("stored media missing: %v", err)
+	}
+	if media["mime_type"] != "image/png" || media["width"] != float64(1) || media["height"] != float64(1) {
+		t.Fatalf("uploaded metadata = %#v", media)
+	}
+
+	invalid := multipartAdminRequest(t, server, session, csrf, "/api/admin/media", "not-image.txt", []byte("not an image"), "Not an image")
+	assertAPIError(t, invalid, http.StatusBadRequest, "media_validation", "The uploaded image is invalid.")
+}
+
+func TestMediaManagementAPIRejectsOversizedUpload(t *testing.T) {
+	server, _, session, csrf := newAdminServerWithMediaDir(t, t.TempDir())
+	response := multipartAdminRequest(t, server, session, csrf, "/api/admin/media", "large.png", bytes.Repeat([]byte{'x'}, int(10*1024*1024+1)), "Oversized")
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("oversized upload status = %d: %s", response.StatusCode, readBody(t, response))
+	}
+}
+
+func TestSettingsManagementAPIValidatesInput(t *testing.T) {
+	server, _, session, csrf := newAdminServer(t)
+	invalid := adminRequest(t, server, session, csrf, http.MethodPut, "/api/admin/settings", map[string]any{"site_title": "", "description": "Notes"})
+	assertAPIError(t, invalid, http.StatusBadRequest, "management_validation", "The management data is invalid.")
+	saved := adminRequest(t, server, session, csrf, http.MethodPut, "/api/admin/settings", map[string]any{"site_title": "Diary", "description": "Notes", "author": "Iven"})
+	if saved.StatusCode != http.StatusOK {
+		t.Fatalf("save settings = %d: %s", saved.StatusCode, readBody(t, saved))
+	}
+}
+
 func newAdminServer(t *testing.T) (*httptest.Server, *sql.DB, *http.Cookie, *http.Cookie) {
+	return newAdminServerWithMediaDir(t, "")
+}
+
+func newAdminServerWithMediaDir(t *testing.T, mediaDir string) (*httptest.Server, *sql.DB, *http.Cookie, *http.Cookie) {
 	t.Helper()
 	ctx := context.Background()
 	db, err := appdb.Open(ctx, filepath.Join(t.TempDir(), "data"))
@@ -215,7 +284,7 @@ func newAdminServer(t *testing.T) (*httptest.Server, *sql.DB, *http.Cookie, *htt
 	if _, err := repo.UpsertAdmin(ctx, "admin", passwordHash, now); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewTLSServer(web.NewServer(repo, web.ServerOptions{AuthRepository: repo, PublicURL: authOrigin, Clock: func() time.Time { return now }}))
+	server := httptest.NewTLSServer(web.NewServer(repo, web.ServerOptions{AuthRepository: repo, MediaDir: mediaDir, PublicURL: authOrigin, Clock: func() time.Time { return now }}))
 	t.Cleanup(server.Close)
 	response := login(t, server, "admin", "secret")
 	if response.StatusCode != http.StatusOK {
@@ -224,6 +293,46 @@ func newAdminServer(t *testing.T) (*httptest.Server, *sql.DB, *http.Cookie, *htt
 	cookies := cookieMap(response.Cookies())
 	_ = response.Body.Close()
 	return server, db, cookies[web.SessionCookieName], cookies[web.CSRFCookieName]
+}
+
+func multipartAdminRequest(t *testing.T, server *httptest.Server, session, csrf *http.Cookie, path, filename string, contents []byte, altText string) *http.Response {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	part, err := writer.CreateFormFile("file", filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write(contents); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.WriteField("alt_text", altText); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request, err := http.NewRequest(http.MethodPost, server.URL+path, &body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request.Header.Set("Origin", authOrigin)
+	request.Header.Set(web.CSRFHeaderName, csrf.Value)
+	request.AddCookie(session)
+	request.AddCookie(csrf)
+	return do(t, server, request)
+}
+
+func tinyPNG(t *testing.T) []byte {
+	t.Helper()
+	var body bytes.Buffer
+	image := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	image.Set(0, 0, color.RGBA{G: 255, A: 255})
+	if err := png.Encode(&body, image); err != nil {
+		t.Fatal(err)
+	}
+	return body.Bytes()
 }
 
 func createAdminDraft(t *testing.T, server *httptest.Server, session, csrf *http.Cookie, input map[string]any) map[string]any {
