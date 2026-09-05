@@ -1212,25 +1212,25 @@ git commit -m "feat: manage taxonomy media and settings"
 - Modify: `cmd/blog/main.go`
 - Test: `cmd/blog/main_test.go`
 
-- [ ] **Step 1: Write failing operational tests**
+- [x] **Step 1: Write failing operational tests**
 
 Assert panic recovery returns a request ID without stack details, access logs omit cookies, `/readyz` fails when the data directory is not writable, cache invalidation removes article and dependent list keys, and server shutdown respects a ten-second timeout.
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 Run: `go test ./internal/site ./internal/web ./cmd/blog -run 'TestCache|TestReady|TestRecovery|TestShutdown' -v`
 
 Expected: FAIL.
 
-- [ ] **Step 3: Implement operational behavior**
+- [x] **Step 3: Implement operational behavior**
 
 Use `log/slog` JSON output. Middleware logs request ID, method, route pattern, status, bytes, and duration. Cache entries carry explicit keys and expirations; publication invalidates the article, home, archive, category, tag, RSS, and sitemap keys.
 
-- [ ] **Step 4: Wire graceful process lifecycle**
+- [x] **Step 4: Wire graceful process lifecycle**
 
 `serve` opens the database, runs migrations, constructs services, starts `http.Server`, listens for `SIGINT`/`SIGTERM`, and calls `Shutdown` with a ten-second context. Readiness is false until migration and storage checks pass.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run: `go test ./...`
 

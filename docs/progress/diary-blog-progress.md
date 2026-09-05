@@ -14,7 +14,7 @@
 
 总体状态：进行中
 
-最后登记：2026-09-05 22:00 CST
+最后登记：2026-09-05 22:25 CST
 
 ## 状态定义
 
@@ -51,8 +51,8 @@
 | 10 | Vue 后台框架与登录 | 完成 | `2dc1bc6`, `ebc09c8`, `d3d5500` | 独立审查通过；`npm --prefix admin test`、`npm --prefix admin run build` 通过 | 已修正 `/admin` base 路由与匿名 restore 后登录跳转 |
 | 11 | 文章列表与 Markdown 编辑器 | 完成 | `3b18f87`, `7c8cb32`, `3b9df88`, `7fa87a4` | 两轮独立审查修复后通过；`npm --prefix admin test`、`npm --prefix admin run build` 通过 | 已修正 Markdown 父级同步、发布校验与 destructive 操作期间未保存内容保护 |
 | 12 | 分类、媒体与站点设置 | 完成 | `f857dca`, `2e37bc6`, `0f63e4b`, `d68ed8a`, `7710281`, `5ea64fb` | 四轮独立审查修复后通过；`go test ./...`、`go vet ./...`、`npm --prefix admin test`、`npm --prefix admin run build`、`git diff --check` 通过 | WebP 使用真实解码；AVIF 采用严格结构/属性/extent 校验而非像素级解码 |
-| 13 | 日志、健康检查、缓存与停机 | 进行中 | - | 准备进入 Task brief 与红绿循环 | - |
-| 14 | 备份、恢复、迁移与管理 CLI | 未开始 | - | - | - |
+| 13 | 日志、健康检查、缓存与停机 | 完成 | `aa78da2`, `b106691` | 一轮独立审查修复后通过；Task 13 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已修正 panic 日志状态与 slug 变更后的旧文章缓存失效 |
+| 14 | 备份、恢复、迁移与管理 CLI | 进行中 | - | 准备进入 Task brief 与红绿循环 | - |
 | 15 | 生产构建与 Docker Compose | 未开始 | - | - | - |
 | 16 | E2E、响应式与发布门禁 | 未开始 | - | - | - |
 
@@ -69,6 +69,7 @@
 - Vue 管理后台基础 shell 已完成，包含 typed API client、会话恢复、路由守卫、登录表单、固定侧栏和移动抽屉。
 - 文章列表与 Markdown 编辑器已完成，包含 autosave 串行化、冲突态保护、CodeMirror 生命周期、预览、发布、归档和版本恢复。
 - 分类、标签、媒体库与站点设置已完成，包含 CSRF 管理端点、SQLite 全局 taxonomy slug trigger、10 MiB 媒体上传边界、WebP 解码校验、AVIF 结构校验、媒体 alt text 更新和管理视图 edit/delete 对话框。
+- 运行期能力已完成，包含 JSON slog、请求 ID、访问日志 status/bytes/route pattern、panic recovery、readyz 存储检查、进程内公开页/RSS/Sitemap 缓存、发布/归档缓存失效和 10 秒优雅停机。
 - 工作区仍包含 `.gitignore`、`.idea/`、`.metrics/` 用户改动；从本次起 `docs/progress/` 作为总控文档持续更新。
 
 ## 风险与偏差
@@ -101,9 +102,10 @@
 | 2026-09-04 16:47 CST | Task 10 独立审查通过；Vue 后台 shell 与登录完成，进入 Task 11。 |
 | 2026-09-05 09:46 CST | Task 11 经两轮审查修复通过；文章列表与 Markdown 编辑器完成，进入 Task 12。 |
 | 2026-09-05 22:00 CST | Task 12 经四轮审查修复通过；分类、媒体上传与站点设置完成，M3 完成并进入 Task 13。 |
+| 2026-09-05 22:25 CST | Task 13 经一轮审查修复通过；运行期日志、健康检查、缓存与优雅停机完成，进入 Task 14。 |
 
 ## 下一跟进点
 
-1. 执行 Task 13：日志、健康检查、缓存与优雅停机。
-2. Task 13 通过独立审查后自动进入 Task 14 备份、恢复、迁移与管理 CLI。
+1. 执行 Task 14：备份、恢复、迁移与管理 CLI。
+2. Task 14 通过独立审查后自动进入 Task 15 生产构建与 Docker Compose。
 3. 后续每个 Task 在实现提交和独立审查后同步更新本总控文档。
