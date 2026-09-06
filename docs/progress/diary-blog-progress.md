@@ -14,7 +14,7 @@
 
 总体状态：进行中
 
-最后登记：2026-09-06 08:28 CST
+最后登记：2026-09-06 08:50 CST
 
 ## 状态定义
 
@@ -53,7 +53,7 @@
 | 12 | 分类、媒体与站点设置 | 完成 | `f857dca`, `2e37bc6`, `0f63e4b`, `d68ed8a`, `7710281`, `5ea64fb` | 四轮独立审查修复后通过；`go test ./...`、`go vet ./...`、`npm --prefix admin test`、`npm --prefix admin run build`、`git diff --check` 通过 | WebP 使用真实解码；AVIF 采用严格结构/属性/extent 校验而非像素级解码 |
 | 13 | 日志、健康检查、缓存与停机 | 完成 | `aa78da2`, `b106691` | 一轮独立审查修复后通过；Task 13 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已修正 panic 日志状态与 slug 变更后的旧文章缓存失效 |
 | 14 | 备份、恢复、迁移与管理 CLI | 完成 | `7695e9e`, `5bd3db2`, `69ec676`, `e38ca9e`, `a454f28` | 两轮独立审查修复后通过；Task 14 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已改用 SQLite online backup；恢复前校验 checksum、路径白名单、数据库 quick_check 与迁移版本；强制恢复具备 rollback；备份/恢复限制对齐 |
-| 15 | 生产构建与 Docker Compose | 未开始 | - | - | - |
+| 15 | 生产构建与 Docker Compose | 完成 | `aa80ca1`, `b52e4d0`, `e3c5117` | 两轮独立审查修复后通过；`npm --prefix admin test`、`npm --prefix admin run build`、`go test ./...`、`go vet ./...`、YAML parse、Makefile dry-run 与 `git diff --check` 通过 | Docker CLI 不在当前宿主机 PATH，Compose build/up/curl 未执行；已修正 Caddy 外网 egress、`/data/site` 恢复路径、trusted proxy CIDR、localhost health 入口与 `10MiB` 上传限制 |
 | 16 | E2E、响应式与发布门禁 | 未开始 | - | - | - |
 
 ## 当前实现快照
@@ -71,6 +71,7 @@
 - 分类、标签、媒体库与站点设置已完成，包含 CSRF 管理端点、SQLite 全局 taxonomy slug trigger、10 MiB 媒体上传边界、WebP 解码校验、AVIF 结构校验、媒体 alt text 更新和管理视图 edit/delete 对话框。
 - 运行期能力已完成，包含 JSON slog、请求 ID、访问日志 status/bytes/route pattern、panic recovery、readyz 存储检查、进程内公开页/RSS/Sitemap 缓存、发布/归档缓存失效和 10 秒优雅停机。
 - 备份、恢复、迁移与管理 CLI 已完成，包含 SQLite online backup、`.tar.gz` manifest/checksum、恢复前数据库/迁移验证、强制恢复 rollback、`backup`/`restore`/`migrate`/`admin reset-password`/`search rebuild` 子命令，以及备份输出 media/symlink 防护。
+- 生产容器化已完成，包含 Node 24 + Go 1.27 多阶段 Dockerfile、非 root runtime、Compose Blog/Caddy 拓扑、Caddy 压缩/安全头/10MiB 上传限制、`/data/site` 应用目录、`/data/backups` 备份路径和 restore-safe Makefile 目标。
 - 工作区仍包含 `.gitignore`、`.idea/`、`.metrics/` 用户改动；从本次起 `docs/progress/` 作为总控文档持续更新。
 
 ## 风险与偏差
@@ -86,6 +87,8 @@
 | R-007 | 低 | 已裁定 | AVIF 上传校验当前验证 ISO-BMFF/AVIF 元数据、属性关联和数据 extent，不做 AV1 像素级解码 | Task 12 先采用严格结构门禁；若后续接入维护良好的 AVIF decoder，可替换为像素级验证 |
 | R-008 | 低 | 已裁定 | 备份 manifest 写在 archive 最后，无法包含自身 checksum | Manifest 校验所有 payload entry；restore 拒绝 manifest 后额外条目和 payload checksum 不匹配 |
 | R-009 | 中 | 已裁定 | 备份/恢复当前限制为 10,000 entries、单 entry 64 MiB、payload 总量 512 MiB、manifest 1 MiB | 首版用对称限制避免生成不可恢复备份；大站点后续需同步提高常量与测试 |
+| R-010 | 中 | 待环境验证 | 当前宿主机没有 `docker` 可执行文件 | Task 15 已完成非 Docker 验证；`docker compose build/up/ps` 与 Caddy-routed curl 留到具备 Docker Desktop/Engine 的环境执行 |
+| R-011 | 低 | 已裁定 | Compose 固定使用 `172.30.0.0/24` 内部网段和 Caddy `172.30.0.10/32` trusted proxy | README 说明如与宿主 Docker 网络冲突需同时调整 subnet 与 trusted proxy CIDR |
 
 ## 变更记录
 
@@ -107,9 +110,10 @@
 | 2026-09-05 22:00 CST | Task 12 经四轮审查修复通过；分类、媒体上传与站点设置完成，M3 完成并进入 Task 13。 |
 | 2026-09-05 22:25 CST | Task 13 经一轮审查修复通过；运行期日志、健康检查、缓存与优雅停机完成，进入 Task 14。 |
 | 2026-09-06 08:28 CST | Task 14 经两轮审查修复通过；备份、恢复、迁移和管理 CLI 完成，进入 Task 15。 |
+| 2026-09-06 08:50 CST | Task 15 经两轮审查修复通过；生产 Dockerfile、Compose、Caddy 与部署文档完成，进入 Task 16。 |
 
 ## 下一跟进点
 
-1. 执行 Task 15：生产构建与 Docker Compose。
-2. Task 15 通过独立审查后自动进入 Task 16 E2E、响应式与发布门禁。
+1. 执行 Task 16：E2E、响应式与发布门禁。
+2. Task 16 通过独立审查后完成 M4 Operational Release，并进入最终整体验证/发布清单阶段。
 3. 后续每个 Task 在实现提交和独立审查后同步更新本总控文档。
