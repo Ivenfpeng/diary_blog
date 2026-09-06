@@ -1,0 +1,24 @@
+{
+	# Keep HTTP health checks available while Caddy still serves HTTPS on :443.
+	auto_https disable_redirects
+	email {$CADDY_EMAIL}
+}
+
+{$BLOG_DOMAIN} {
+	encode zstd gzip
+
+	@media_upload path /api/admin/media
+	request_body @media_upload {
+		max_size 10MB
+	}
+
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), geolocation=(), microphone=()"
+	}
+
+	reverse_proxy blog:8080
+}

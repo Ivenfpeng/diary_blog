@@ -1,0 +1,48 @@
+services:
+  blog:
+    build:
+      context: .
+    environment:
+      BLOG_ADDR: :8080
+      BLOG_DATA_DIR: /data
+      BLOG_PUBLIC_URL: ${BLOG_PUBLIC_URL:?set BLOG_PUBLIC_URL in .env}
+      BLOG_COOKIE_NAME: ${BLOG_COOKIE_NAME:-diary_blog_session}
+    volumes:
+      - blog_data:/data
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      blog:
+        condition: service_healthy
+    environment:
+      BLOG_DOMAIN: ${BLOG_DOMAIN:?set BLOG_DOMAIN in .env}
+      CADDY_EMAIL: ${CADDY_EMAIL:?set CADDY_EMAIL in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - app
+    restart: unless-stopped
+
+networks:
+  app:
+    internal: true
+
+volumes:
+  blog_data:
+  caddy_data:
+  caddy_config:
