@@ -10,11 +10,11 @@
 
 当前分支：`codex/diary-blog-mvp`
 
-当前阶段：M4 Operational Release
+当前阶段：最终整体验收
 
-总体状态：进行中
+总体状态：待最终整分支复审
 
-最后登记：2026-09-06 08:50 CST
+最后登记：2026-09-06 19:34 CST
 
 ## 状态定义
 
@@ -33,7 +33,7 @@
 | M1 Core Foundation | Task 1-5 | 完成 | 数据库、Markdown、草稿、发布与搜索核心完成 |
 | M2 Public Product | Task 6-7 | 完成 | 公开页面、搜索、RSS、Sitemap 和 SEO 可用 |
 | M3 Authoring Product | Task 8-12 | 完成 | 登录、管理 API、Vue 写作后台和媒体管理可用 |
-| M4 Operational Release | Task 13-16 | 进行中 | 运维、备份、容器部署和 E2E 验收通过 |
+| M4 Operational Release | Task 13-16 | 完成 | 运维、备份、容器部署和 E2E 验收通过 |
 
 ## 任务登记
 
@@ -54,7 +54,7 @@
 | 13 | 日志、健康检查、缓存与停机 | 完成 | `aa78da2`, `b106691` | 一轮独立审查修复后通过；Task 13 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已修正 panic 日志状态与 slug 变更后的旧文章缓存失效 |
 | 14 | 备份、恢复、迁移与管理 CLI | 完成 | `7695e9e`, `5bd3db2`, `69ec676`, `e38ca9e`, `a454f28` | 两轮独立审查修复后通过；Task 14 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已改用 SQLite online backup；恢复前校验 checksum、路径白名单、数据库 quick_check 与迁移版本；强制恢复具备 rollback；备份/恢复限制对齐 |
 | 15 | 生产构建与 Docker Compose | 完成 | `aa80ca1`, `b52e4d0`, `e3c5117` | 两轮独立审查修复后通过；`npm --prefix admin test`、`npm --prefix admin run build`、`go test ./...`、`go vet ./...`、YAML parse、Makefile dry-run 与 `git diff --check` 通过 | Docker CLI 不在当前宿主机 PATH，Compose build/up/curl 未执行；已修正 Caddy 外网 egress、`/data/site` 恢复路径、trusted proxy CIDR、localhost health 入口与 `10MiB` 上传限制 |
-| 16 | E2E、响应式与发布门禁 | 未开始 | - | - | - |
+| 16 | E2E、响应式与发布门禁 | 完成 | `23a07e2`, `8bac5e8`, `da090f3` | 两轮独立审查修复后通过；`npm run test:e2e`、`go test ./...`、`npm --prefix admin test`、`go vet ./...`、`git diff --check`、Makefile dry-run 通过 | 已补全 draft/archived 全公开面排除矩阵、响应式重叠/遮挡/垂直裁切断言和 fresh-volume restore-smoke 门禁；Docker CLI 不在当前宿主机 PATH，容器实际运行门禁未执行 |
 
 ## 当前实现快照
 
@@ -72,6 +72,7 @@
 - 运行期能力已完成，包含 JSON slog、请求 ID、访问日志 status/bytes/route pattern、panic recovery、readyz 存储检查、进程内公开页/RSS/Sitemap 缓存、发布/归档缓存失效和 10 秒优雅停机。
 - 备份、恢复、迁移与管理 CLI 已完成，包含 SQLite online backup、`.tar.gz` manifest/checksum、恢复前数据库/迁移验证、强制恢复 rollback、`backup`/`restore`/`migrate`/`admin reset-password`/`search rebuild` 子命令，以及备份输出 media/symlink 防护。
 - 生产容器化已完成，包含 Node 24 + Go 1.27 多阶段 Dockerfile、非 root runtime、Compose Blog/Caddy 拓扑、Caddy 压缩/安全头/10MiB 上传限制、`/data/site` 应用目录、`/data/backups` 备份路径和 restore-safe Makefile 目标。
+- E2E 与发布门禁已完成，包含 Playwright 完整写作流、draft/archived 在首页/分类/归档/搜索/RSS/Sitemap 的公开排除验证、桌面/平板/移动响应式重叠/遮挡/裁切断言、截图产物、非容器 release gate，以及 Compose fresh-volume restore-smoke 目标。
 - 工作区仍包含 `.gitignore`、`.idea/`、`.metrics/` 用户改动；从本次起 `docs/progress/` 作为总控文档持续更新。
 
 ## 风险与偏差
@@ -89,6 +90,8 @@
 | R-009 | 中 | 已裁定 | 备份/恢复当前限制为 10,000 entries、单 entry 64 MiB、payload 总量 512 MiB、manifest 1 MiB | 首版用对称限制避免生成不可恢复备份；大站点后续需同步提高常量与测试 |
 | R-010 | 中 | 待环境验证 | 当前宿主机没有 `docker` 可执行文件 | Task 15 已完成非 Docker 验证；`docker compose build/up/ps` 与 Caddy-routed curl 留到具备 Docker Desktop/Engine 的环境执行 |
 | R-011 | 低 | 已裁定 | Compose 固定使用 `172.30.0.0/24` 内部网段和 Caddy `172.30.0.10/32` trusted proxy | README 说明如与宿主 Docker 网络冲突需同时调整 subnet 与 trusted proxy CIDR |
+| R-012 | 中 | 待环境验证 | 当前宿主机无法下载 Playwright bundled Chromium，E2E 默认使用已安装 Chrome channel | CI 或干净开发机需先运行 `npx playwright install chromium` 并使用 `PLAYWRIGHT_BUNDLED_CHROMIUM=1 npm run test:e2e`，或安装可用 Chrome channel |
+| R-013 | 中 | 待环境验证 | Docker CLI 缺失导致 `container-release-gate` 与 `restore-smoke` 未实际执行 | 已增加可重复 Makefile 目标并完成 dry-run；需在具备 Docker 的宿主机执行 `make container-release-gate BACKUP=/data/backups/release-smoke.tar.gz SMOKE_ARTICLE_PATH=/posts/<slug> SMOKE_SEARCH_QUERY=<query>` |
 
 ## 变更记录
 
@@ -111,9 +114,10 @@
 | 2026-09-05 22:25 CST | Task 13 经一轮审查修复通过；运行期日志、健康检查、缓存与优雅停机完成，进入 Task 14。 |
 | 2026-09-06 08:28 CST | Task 14 经两轮审查修复通过；备份、恢复、迁移和管理 CLI 完成，进入 Task 15。 |
 | 2026-09-06 08:50 CST | Task 15 经两轮审查修复通过；生产 Dockerfile、Compose、Caddy 与部署文档完成，进入 Task 16。 |
+| 2026-09-06 19:34 CST | Task 16 经两轮审查修复通过；E2E、响应式验证、非容器 release gate 与 Compose restore-smoke 命令完成，M4 完成并进入最终整分支复审。 |
 
 ## 下一跟进点
 
-1. 执行 Task 16：E2E、响应式与发布门禁。
-2. Task 16 通过独立审查后完成 M4 Operational Release，并进入最终整体验证/发布清单阶段。
-3. 后续每个 Task 在实现提交和独立审查后同步更新本总控文档。
+1. 执行最终整分支复审，覆盖 Task 1-16 与所有 ledger rulings/deferred items。
+2. 在具备 Docker Desktop/Engine 的宿主机运行 `make container-release-gate`，补齐容器 build/up/health/backup/restore-smoke 实测证据。
+3. 最终复审通过后进入发布收尾，整理 release checklist 与剩余环境验证项。
