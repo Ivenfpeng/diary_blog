@@ -3,14 +3,14 @@ services:
     build:
       context: .
     environment:
-      BLOG_ADDR: :8080
-      BLOG_DATA_DIR: /data
-      BLOG_PUBLIC_URL: ${BLOG_PUBLIC_URL:?set BLOG_PUBLIC_URL in .env}
-      BLOG_COOKIE_NAME: ${BLOG_COOKIE_NAME:-diary_blog_session}
+      BLOG_ADDR: ":8080"
+      BLOG_DATA_DIR: "/data/site"
+      BLOG_PUBLIC_URL: "${BLOG_PUBLIC_URL:?set BLOG_PUBLIC_URL in .env}"
+      BLOG_TRUSTED_PROXY_CIDRS: "172.30.0.10/32"
     volumes:
       - blog_data:/data
     networks:
-      - app
+      app: {}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
       interval: 10s
@@ -25,8 +25,8 @@ services:
       blog:
         condition: service_healthy
     environment:
-      BLOG_DOMAIN: ${BLOG_DOMAIN:?set BLOG_DOMAIN in .env}
-      CADDY_EMAIL: ${CADDY_EMAIL:?set CADDY_EMAIL in .env}
+      BLOG_DOMAIN: "${BLOG_DOMAIN:?set BLOG_DOMAIN in .env}"
+      CADDY_EMAIL: "${CADDY_EMAIL:?set CADDY_EMAIL in .env}"
     ports:
       - "80:80"
       - "443:443"
@@ -35,12 +35,18 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     networks:
-      - app
+      app:
+        ipv4_address: 172.30.0.10
+      edge:
     restart: unless-stopped
 
 networks:
   app:
     internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+  edge:
 
 volumes:
   blog_data:

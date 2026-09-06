@@ -62,7 +62,8 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	repository := sqliterepo.NewPostRepository(db)
 	server := &http.Server{Addr: cfg.Addr, Handler: web.NewServer(repository, web.ServerOptions{
 		MediaDir: filepath.Join(cfg.DataDir, "media"), Logger: logger, PublicURL: cfg.PublicURL,
-		AuthRepository: repository, Ready: func() error { return writable(cfg.DataDir) }, Cache: site.NewCache(time.Minute),
+		AuthRepository: repository, Auth: web.AuthOptions{TrustedProxyCIDRs: cfg.TrustedProxyCIDRs},
+		Ready: func() error { return writable(cfg.DataDir) }, Cache: site.NewCache(time.Minute),
 	})}
 	errs := make(chan error, 1)
 	go func() { errs <- server.ListenAndServe() }()

@@ -64,14 +64,16 @@ the email address Caddy uses for certificate registration:
 BLOG_DOMAIN=blog.example.com
 BLOG_PUBLIC_URL=https://blog.example.com
 CADDY_EMAIL=ops@example.com
-# Optional: use a unique cookie name when sharing a parent domain.
-BLOG_COOKIE_NAME=diary_blog_session
 ```
 
 `BLOG_DOMAIN`, `BLOG_PUBLIC_URL`, and `CADDY_EMAIL` are required production
-values. `BLOG_COOKIE_NAME` is optional. Do not point `BLOG_PUBLIC_URL` at an
-internal Compose hostname: it is used to produce canonical links and cookie
-settings.
+values. Do not point `BLOG_PUBLIC_URL` at an internal Compose hostname: it is
+used to produce canonical links and cookie settings. Compose assigns Caddy
+`172.30.0.10` on the private application network and passes
+`BLOG_TRUSTED_PROXY_CIDRS=172.30.0.10/32` to the app so login throttling and
+logs can use trusted forwarded client addresses without trusting arbitrary
+peers. If `172.30.0.0/24` conflicts with an existing Docker network on your
+host, update both the Compose subnet and the trusted proxy CIDR together.
 
 Build and start the production topology:
 
@@ -84,10 +86,18 @@ curl --fail http://localhost/readyz
 ```
 
 Caddy is the only service with published ports (80 and 443); the application
-container is available only on the internal Compose network. Persistent blog
-data is stored in the `blog_data` named volume and Caddy certificates in
-`caddy_data`. Use `make container-build`, `make compose-up`, and
-`make compose-logs` as equivalents for the common operations.
+container is available only on the internal Compose network. Caddy also joins a
+normal egress-capable network for certificate issuance and renewal. Persistent
+blog data is stored under `/data/site` in the `blog_data` named volume, backups
+under `/data/backups`, and Caddy certificates in `caddy_data`. Use
+`make container-build`, `make compose-up`, and `make compose-logs` as
+equivalents for the common operations.
+
+Create the initial administrator after the containers are running:
+
+```sh
+printf '%s\n' 'choose-a-long-password' | docker compose exec -T blog /app/blog admin reset-password --username admin
+```
 
 ## Backup and restore
 
@@ -107,7 +117,10 @@ docker compose up -d blog
 ```
 
 `restore` validates the archive before replacing data. Use a new or known
-empty `blog_data` volume when rehearsing a restore.
+empty `blog_data` volume when rehearsing a restore. In the container topology
+the named volume is mounted at `/data`, while the application data directory is
+`/data/site`; that lets restore stage and rename directories inside the volume
+instead of trying to replace the mount point itself.
 
 ## Upgrading
 

@@ -1,15 +1,13 @@
 {
-	# Keep HTTP health checks available while Caddy still serves HTTPS on :443.
-	auto_https disable_redirects
 	email {$CADDY_EMAIL}
 }
 
-{$BLOG_DOMAIN} {
+(blog_proxy) {
 	encode zstd gzip
 
 	@media_upload path /api/admin/media
 	request_body @media_upload {
-		max_size 10MB
+		max_size 10MiB
 	}
 
 	header {
@@ -21,4 +19,12 @@
 	}
 
 	reverse_proxy blog:8080
+}
+
+http://localhost {
+	import blog_proxy
+}
+
+{$BLOG_DOMAIN} {
+	import blog_proxy
 }

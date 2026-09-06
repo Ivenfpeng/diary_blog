@@ -2,8 +2,9 @@ NODE_BIN := $(shell brew --prefix node@24 2>/dev/null)/bin
 NODE_ENV := PATH="$(NODE_BIN):$(PATH)"
 GO_CACHE ?= /tmp/diary-blog-go-cache
 BACKUP ?= /data/backups/backup.tar.gz
+RESTORE ?= $(BACKUP)
 
-.PHONY: test-go test-admin test vet admin-build sync-admin build dev container-build compose-up compose-down compose-ps compose-logs backup
+.PHONY: test-go test-admin test vet admin-build sync-admin build dev container-build compose-up compose-down compose-ps compose-logs backup restore
 
 test-go:
 	GOCACHE=$(GO_CACHE) go test ./...
@@ -46,3 +47,6 @@ compose-logs:
 
 backup:
 	docker compose exec -T blog /app/blog backup --output $(BACKUP)
+
+restore:
+	docker compose run --rm --no-deps blog restore --input $(RESTORE) --force

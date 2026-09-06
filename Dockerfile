@@ -25,14 +25,14 @@ FROM alpine:3.22
 RUN apk add --no-cache ca-certificates \
     && addgroup -S blog \
     && adduser -S -G blog -h /app blog \
-    && mkdir -p /data \
-    && chown blog:blog /data
+    && mkdir -p /data/site /data/backups \
+    && chown -R blog:blog /data
 
 WORKDIR /app
 COPY --from=go-build /out/blog /app/blog
 
 ENV BLOG_ADDR=:8080 \
-    BLOG_DATA_DIR=/data
+    BLOG_DATA_DIR=/data/site
 
 VOLUME ["/data"]
 EXPOSE 8080
