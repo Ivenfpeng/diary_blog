@@ -49,4 +49,6 @@ backup:
 	docker compose exec -T blog /app/blog backup --output $(BACKUP)
 
 restore:
+	docker compose stop blog
 	docker compose run --rm --no-deps blog restore --input $(RESTORE) --force
+	docker compose up -d blog
