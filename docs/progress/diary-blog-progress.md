@@ -14,7 +14,7 @@
 
 总体状态：进行中
 
-最后登记：2026-09-05 22:25 CST
+最后登记：2026-09-06 08:28 CST
 
 ## 状态定义
 
@@ -52,7 +52,7 @@
 | 11 | 文章列表与 Markdown 编辑器 | 完成 | `3b18f87`, `7c8cb32`, `3b9df88`, `7fa87a4` | 两轮独立审查修复后通过；`npm --prefix admin test`、`npm --prefix admin run build` 通过 | 已修正 Markdown 父级同步、发布校验与 destructive 操作期间未保存内容保护 |
 | 12 | 分类、媒体与站点设置 | 完成 | `f857dca`, `2e37bc6`, `0f63e4b`, `d68ed8a`, `7710281`, `5ea64fb` | 四轮独立审查修复后通过；`go test ./...`、`go vet ./...`、`npm --prefix admin test`、`npm --prefix admin run build`、`git diff --check` 通过 | WebP 使用真实解码；AVIF 采用严格结构/属性/extent 校验而非像素级解码 |
 | 13 | 日志、健康检查、缓存与停机 | 完成 | `aa78da2`, `b106691` | 一轮独立审查修复后通过；Task 13 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已修正 panic 日志状态与 slug 变更后的旧文章缓存失效 |
-| 14 | 备份、恢复、迁移与管理 CLI | 进行中 | - | 准备进入 Task brief 与红绿循环 | - |
+| 14 | 备份、恢复、迁移与管理 CLI | 完成 | `7695e9e`, `5bd3db2`, `69ec676`, `e38ca9e`, `a454f28` | 两轮独立审查修复后通过；Task 14 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已改用 SQLite online backup；恢复前校验 checksum、路径白名单、数据库 quick_check 与迁移版本；强制恢复具备 rollback；备份/恢复限制对齐 |
 | 15 | 生产构建与 Docker Compose | 未开始 | - | - | - |
 | 16 | E2E、响应式与发布门禁 | 未开始 | - | - | - |
 
@@ -70,6 +70,7 @@
 - 文章列表与 Markdown 编辑器已完成，包含 autosave 串行化、冲突态保护、CodeMirror 生命周期、预览、发布、归档和版本恢复。
 - 分类、标签、媒体库与站点设置已完成，包含 CSRF 管理端点、SQLite 全局 taxonomy slug trigger、10 MiB 媒体上传边界、WebP 解码校验、AVIF 结构校验、媒体 alt text 更新和管理视图 edit/delete 对话框。
 - 运行期能力已完成，包含 JSON slog、请求 ID、访问日志 status/bytes/route pattern、panic recovery、readyz 存储检查、进程内公开页/RSS/Sitemap 缓存、发布/归档缓存失效和 10 秒优雅停机。
+- 备份、恢复、迁移与管理 CLI 已完成，包含 SQLite online backup、`.tar.gz` manifest/checksum、恢复前数据库/迁移验证、强制恢复 rollback、`backup`/`restore`/`migrate`/`admin reset-password`/`search rebuild` 子命令，以及备份输出 media/symlink 防护。
 - 工作区仍包含 `.gitignore`、`.idea/`、`.metrics/` 用户改动；从本次起 `docs/progress/` 作为总控文档持续更新。
 
 ## 风险与偏差
@@ -83,6 +84,8 @@
 | R-005 | 中 | 已解决 | 配置 URL 含转义路径前缀时 RSS/Sitemap 可能重复编码 | 已统一 URL Path/RawPath 处理并通过专项审查 |
 | R-006 | 中 | 待后续 | Caddy 反向代理场景需显式配置可信代理 CIDR，否则登录限流会按直接 peer 计数 | Task 13/15 运维与部署配置阶段接入运行时配置 |
 | R-007 | 低 | 已裁定 | AVIF 上传校验当前验证 ISO-BMFF/AVIF 元数据、属性关联和数据 extent，不做 AV1 像素级解码 | Task 12 先采用严格结构门禁；若后续接入维护良好的 AVIF decoder，可替换为像素级验证 |
+| R-008 | 低 | 已裁定 | 备份 manifest 写在 archive 最后，无法包含自身 checksum | Manifest 校验所有 payload entry；restore 拒绝 manifest 后额外条目和 payload checksum 不匹配 |
+| R-009 | 中 | 已裁定 | 备份/恢复当前限制为 10,000 entries、单 entry 64 MiB、payload 总量 512 MiB、manifest 1 MiB | 首版用对称限制避免生成不可恢复备份；大站点后续需同步提高常量与测试 |
 
 ## 变更记录
 
@@ -103,9 +106,10 @@
 | 2026-09-05 09:46 CST | Task 11 经两轮审查修复通过；文章列表与 Markdown 编辑器完成，进入 Task 12。 |
 | 2026-09-05 22:00 CST | Task 12 经四轮审查修复通过；分类、媒体上传与站点设置完成，M3 完成并进入 Task 13。 |
 | 2026-09-05 22:25 CST | Task 13 经一轮审查修复通过；运行期日志、健康检查、缓存与优雅停机完成，进入 Task 14。 |
+| 2026-09-06 08:28 CST | Task 14 经两轮审查修复通过；备份、恢复、迁移和管理 CLI 完成，进入 Task 15。 |
 
 ## 下一跟进点
 
-1. 执行 Task 14：备份、恢复、迁移与管理 CLI。
-2. Task 14 通过独立审查后自动进入 Task 15 生产构建与 Docker Compose。
+1. 执行 Task 15：生产构建与 Docker Compose。
+2. Task 15 通过独立审查后自动进入 Task 16 E2E、响应式与发布门禁。
 3. 后续每个 Task 在实现提交和独立审查后同步更新本总控文档。
