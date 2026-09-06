@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -49,9 +50,6 @@ func Backup(ctx context.Context, dataDir, output string) (err error) {
 	if strings.TrimSpace(output) == "" {
 		return errors.New("backup output path is required")
 	}
-	if pathWithin(filepath.Join(dataDir, "media"), output) {
-		return fmt.Errorf("backup output must not be inside media directory: %s", output)
-	}
 	if _, err := os.Stat(output); err == nil {
 		return fmt.Errorf("backup output already exists: %s", output)
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -59,6 +57,9 @@ func Backup(ctx context.Context, dataDir, output string) (err error) {
 	}
 	if err := os.MkdirAll(filepath.Dir(output), 0o750); err != nil {
 		return fmt.Errorf("create backup directory: %w", err)
+	}
+	if err := rejectOutputInsideMedia(dataDir, output); err != nil {
+		return err
 	}
 
 	tempDB, err := os.CreateTemp(filepath.Dir(output), ".blog-backup-*.db")
@@ -156,10 +157,40 @@ func snapshotDatabase(ctx context.Context, dataDir, destination string) error {
 	})
 }
 
+type archiveBudget struct {
+	entries int64
+	payload int64
+}
+
+func (b *archiveBudget) add(size int64, manifest bool) error {
+	b.entries++
+	if b.entries > maxArchiveEntries {
+		return fmt.Errorf("backup archive has more than %d entries", maxArchiveEntries)
+	}
+	if size < 0 {
+		return errors.New("backup archive entry has negative size")
+	}
+	if manifest {
+		if size > maxManifestBytes {
+			return fmt.Errorf("backup manifest exceeds %d bytes", maxManifestBytes)
+		}
+		return nil
+	}
+	if size > maxEntryBytes {
+		return fmt.Errorf("backup archive entry exceeds %d bytes", maxEntryBytes)
+	}
+	b.payload += size
+	if b.payload > maxArchiveBytes {
+		return fmt.Errorf("backup archive exceeds %d bytes", maxArchiveBytes)
+	}
+	return nil
+}
+
 func writeArchive(file *os.File, databasePath, mediaRoot string) error {
 	gz := gzip.NewWriter(file)
 	tw := tar.NewWriter(gz)
 	checksums := map[string]string{}
+	budget := &archiveBudget{}
 	closeWriters := func() error {
 		if err := tw.Close(); err != nil {
 			_ = gz.Close()
@@ -167,11 +198,11 @@ func writeArchive(file *os.File, databasePath, mediaRoot string) error {
 		}
 		return gz.Close()
 	}
-	if err := addFile(tw, databasePath, databaseName, checksums); err != nil {
+	if err := addFile(tw, databasePath, databaseName, checksums, budget); err != nil {
 		_ = closeWriters()
 		return err
 	}
-	if err := addMedia(tw, mediaRoot, checksums); err != nil {
+	if err := addMedia(tw, mediaRoot, checksums, budget); err != nil {
 		_ = closeWriters()
 		return err
 	}
@@ -180,6 +211,10 @@ func writeArchive(file *os.File, databasePath, mediaRoot string) error {
 		_ = closeWriters()
 		return fmt.Errorf("encode backup manifest: %w", err)
 	}
+	if err := budget.add(int64(len(manifest)), true); err != nil {
+		_ = closeWriters()
+		return err
+	}
 	if err := writeEntry(tw, manifestName, 0o600, manifest); err != nil {
 		_ = closeWriters()
 		return err
@@ -187,7 +222,10 @@ func writeArchive(file *os.File, databasePath, mediaRoot string) error {
 	return closeWriters()
 }
 
-func addMedia(tw *tar.Writer, root string, checksums map[string]string) error {
+func addMedia(tw *tar.Writer, root string, checksums map[string]string, budget *archiveBudget) error {
+	if err := budget.add(0, false); err != nil {
+		return err
+	}
 	if err := writeEntry(tw, "media/", 0o750, nil); err != nil {
 		return err
 	}
@@ -229,22 +267,28 @@ func addMedia(tw *tar.Writer, root string, checksums map[string]string) error {
 			return err
 		}
 		if info.IsDir() {
+			if err := budget.add(0, false); err != nil {
+				return err
+			}
 			if err := writeEntry(tw, name+"/", info.Mode().Perm(), nil); err != nil {
 				return err
 			}
 			checksums[name+"/"] = checksum(nil)
 			continue
 		}
-		if err := addFile(tw, path, name, checksums); err != nil {
+		if err := addFile(tw, path, name, checksums, budget); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func addFile(tw *tar.Writer, path, name string, checksums map[string]string) error {
+func addFile(tw *tar.Writer, path, name string, checksums map[string]string, budget *archiveBudget) error {
 	info, err := os.Stat(path)
 	if err != nil {
+		return err
+	}
+	if err := budget.add(info.Size(), false); err != nil {
 		return err
 	}
 	file, err := os.Open(path)
@@ -415,8 +459,34 @@ func pathWithin(root, path string) bool {
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
+func rejectOutputInsideMedia(dataDir, output string) error {
+	mediaRoot := filepath.Join(dataDir, "media")
+	if _, err := os.Stat(mediaRoot); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("inspect media directory: %w", err)
+	}
+	resolvedMedia, err := filepath.EvalSymlinks(mediaRoot)
+	if err != nil {
+		return fmt.Errorf("resolve media directory: %w", err)
+	}
+	resolvedOutputDir, err := filepath.EvalSymlinks(filepath.Dir(output))
+	if err != nil {
+		return fmt.Errorf("resolve backup output directory: %w", err)
+	}
+	resolvedOutput := filepath.Join(resolvedOutputDir, filepath.Base(output))
+	if pathWithin(resolvedMedia, resolvedOutput) {
+		return fmt.Errorf("backup output must not be inside media directory: %s", output)
+	}
+	return nil
+}
+
 func validateBlogDatabase(ctx context.Context, path string) error {
-	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?mode=ro")
+	dsn, err := readOnlyDatabaseDSN(path)
+	if err != nil {
+		return err
+	}
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return fmt.Errorf("open database read-only: %w", err)
 	}
@@ -443,6 +513,18 @@ func validateBlogDatabase(ctx context.Context, path string) error {
 		}
 	}
 	return nil
+}
+
+func readOnlyDatabaseDSN(path string) (string, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve database path: %w", err)
+	}
+	uri := url.URL{Scheme: "file", Path: filepath.ToSlash(absolute)}
+	query := uri.Query()
+	query.Set("mode", "ro")
+	uri.RawQuery = query.Encode()
+	return uri.String(), nil
 }
 
 func extractAndValidate(ctx context.Context, input, stage string) error {

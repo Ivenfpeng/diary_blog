@@ -116,6 +116,35 @@ func TestBackupRejectsOutputInsideMediaDirectory(t *testing.T) {
 	}
 }
 
+func TestBackupRejectsSymlinkedOutputInsideMediaDirectory(t *testing.T) {
+	source := t.TempDir()
+	db, err := appdb.Open(context.Background(), source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := appdb.Migrate(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	mediaRoot := filepath.Join(source, "media")
+	if err := os.MkdirAll(mediaRoot, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "media-link")
+	if err := os.Symlink(mediaRoot, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	output := filepath.Join(link, "site.tar.gz")
+	if err := operations.Backup(context.Background(), source, output); err == nil {
+		t.Fatal("backup accepted symlinked output inside media directory")
+	}
+	if _, err := os.Stat(output); !os.IsNotExist(err) {
+		t.Fatalf("backup archive exists through media symlink: %v", err)
+	}
+}
+
 func TestBackupRejectsMissingSourceDatabase(t *testing.T) {
 	output := filepath.Join(t.TempDir(), "site.tar.gz")
 	if err := operations.Backup(context.Background(), filepath.Join(t.TempDir(), "missing"), output); err == nil {
@@ -137,6 +166,66 @@ func TestBackupRejectsInvalidSourceDatabase(t *testing.T) {
 	}
 	if _, err := os.Stat(output); !os.IsNotExist(err) {
 		t.Fatalf("backup archive exists after invalid source error: %v", err)
+	}
+}
+
+func TestBackupRejectsOversizedMediaFile(t *testing.T) {
+	source := t.TempDir()
+	db, err := appdb.Open(context.Background(), source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := appdb.Migrate(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	largeMedia := filepath.Join(source, "media", "large.bin")
+	if err := os.MkdirAll(filepath.Dir(largeMedia), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.Create(largeMedia)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.CopyN(file, zeroReader{}, 65<<20); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "site.tar.gz")
+	if err := operations.Backup(context.Background(), source, output); err == nil {
+		t.Fatal("backup accepted media larger than restore can accept")
+	}
+	if _, err := os.Stat(output); !os.IsNotExist(err) {
+		t.Fatalf("backup archive exists after oversized media error: %v", err)
+	}
+}
+
+func TestBackupAndRestoreSupportURIMetacharactersInPaths(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "site#hash")
+	db, err := appdb.Open(context.Background(), source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := appdb.Migrate(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(t.TempDir(), "site.tar.gz")
+	if err := operations.Backup(context.Background(), source, archive); err != nil {
+		t.Fatalf("backup with URI metacharacter path: %v", err)
+	}
+	destination := filepath.Join(t.TempDir(), "restored#hash")
+	if err := operations.Restore(context.Background(), archive, destination, false); err != nil {
+		t.Fatalf("restore with URI metacharacter path: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "blog.db")); err != nil {
+		t.Fatalf("restored database missing: %v", err)
 	}
 }
 
