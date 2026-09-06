@@ -6,6 +6,7 @@ import { password, username } from './global-setup'
 const articleMarkdown = readFileSync(join(import.meta.dirname, 'fixtures/article.md'), 'utf8')
 const articleTitle = 'Release gate publishing workflow'
 const articleSlug = 'release-gate-publishing-workflow'
+const categorySlug = 'release-notes'
 
 async function signIn(page: Page): Promise<void> {
   await page.goto('/admin/login')
@@ -21,14 +22,37 @@ async function fillMarkdown(page: Page, editor: Locator, markdown: string): Prom
   await page.keyboard.insertText(markdown)
 }
 
+async function expectListingDoesNotExpose(page: Page, path: string, title: string, slug: string): Promise<void> {
+  await page.goto(path)
+  await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0)
+  await expect(page.locator('body')).not.toContainText(slug)
+}
+
+async function expectSearchDoesNotExpose(page: Page, query: string, title: string): Promise<void> {
+  await page.goto(`/search?q=${encodeURIComponent(query)}`)
+  await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0)
+  await expect(page.getByText('No published articles matched that search.')).toBeVisible()
+}
+
+async function expectFeedAndSitemapDoNotExpose(page: Page, title: string, slug: string): Promise<void> {
+  await page.goto('/rss.xml')
+  await expect(page.locator('body')).not.toContainText(title)
+  await page.goto('/sitemap.xml')
+  await expect(page.locator('body')).not.toContainText(slug)
+}
+
 test('administrator can publish, revise, restore, and remove a complete article workflow', async ({ page }) => {
   await signIn(page)
 
   await page.getByRole('link', { name: 'Categories & tags' }).click()
   await page.getByLabel('Name').fill('Release notes')
-  await page.getByLabel('Slug').fill('release-notes')
+  await page.getByLabel('Slug').fill(categorySlug)
   await page.getByRole('button', { name: 'Add' }).click()
-  await expect(page.locator('.taxonomy-row').filter({ hasText: 'Release notes /release-notes' })).toBeVisible()
+  const categoryRow = page.locator('.taxonomy-row').filter({ hasText: `Release notes /${categorySlug}` })
+  await expect(categoryRow).toBeVisible()
+  const categoryEditID = await categoryRow.getByRole('button', { name: 'Edit' }).getAttribute('data-testid')
+  const categoryID = categoryEditID?.match(/^edit-categories-(\d+)$/)?.[1]
+  if (!categoryID) throw new Error(`Unable to determine release-note category ID from ${categoryEditID}`)
 
   await page.getByRole('link', { name: 'Media' }).click()
   await page.getByLabel('Image').setInputFiles({
@@ -48,7 +72,7 @@ test('administrator can publish, revise, restore, and remove a complete article 
   await page.locator('#title').fill(articleTitle)
   await page.locator('#slug').fill(articleSlug)
   await page.locator('#summary').fill('A browser-verified release workflow.')
-  await page.locator('#category').fill('1')
+  await page.locator('#category').fill(categoryID)
   await fillMarkdown(page, page.locator('.cm-content'), `${articleMarkdown}\n![Release-gate image](${uploadedImage})\n`)
   await page.getByRole('button', { name: 'Save now' }).click()
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()
@@ -67,7 +91,7 @@ test('administrator can publish, revise, restore, and remove a complete article 
 
   await page.goto('/search?q=durable')
   await expect(page.getByRole('link', { name: articleTitle, exact: true })).toBeVisible()
-  await page.goto('/categories/release-notes')
+  await page.goto(`/categories/${categorySlug}`)
   await expect(page.getByRole('link', { name: articleTitle, exact: true })).toBeVisible()
 
   await page.goto('/admin/posts')
@@ -90,16 +114,22 @@ test('administrator can publish, revise, restore, and remove a complete article 
 
   await page.goto('/admin/posts')
   await page.getByRole('button', { name: 'New post' }).click()
-  await page.locator('#title').fill('Private release draft')
-  await page.locator('#slug').fill('private-release-draft')
+  const draftTitle = 'Private release draft'
+  const draftSlug = 'private-release-draft'
+  await page.locator('#title').fill(draftTitle)
+  await page.locator('#slug').fill(draftSlug)
+  await page.locator('#category').fill(categoryID)
   await fillMarkdown(page, page.locator('.cm-content'), '# Private release draft\nThis must remain private.')
   await page.getByRole('button', { name: 'Save now' }).click()
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()
 
-  await page.goto('/posts/private-release-draft')
+  await page.goto(`/posts/${draftSlug}`)
   await expect(page.getByRole('heading', { name: 'Nothing here' })).toBeVisible()
-  await page.goto('/search?q=private-release-draft')
-  await expect(page.getByText('No published articles matched that search.')).toBeVisible()
+  await expectListingDoesNotExpose(page, '/', draftTitle, draftSlug)
+  await expectListingDoesNotExpose(page, `/categories/${categorySlug}`, draftTitle, draftSlug)
+  await expectListingDoesNotExpose(page, '/archive', draftTitle, draftSlug)
+  await expectSearchDoesNotExpose(page, draftSlug, draftTitle)
+  await expectFeedAndSitemapDoNotExpose(page, draftTitle, draftSlug)
 
   await page.goto('/admin/posts')
   await page.locator('.admin-content .post-row').filter({ hasText: articleTitle }).click()
@@ -107,8 +137,9 @@ test('administrator can publish, revise, restore, and remove a complete article 
   await expect(page.getByText('archived', { exact: true })).toBeVisible()
   await page.goto(`/posts/${articleSlug}`)
   await expect(page.getByRole('heading', { name: 'Nothing here' })).toBeVisible()
-  await page.goto('/rss.xml')
-  await expect(page.locator('body')).not.toContainText(articleTitle)
-  await page.goto('/sitemap.xml')
-  await expect(page.locator('body')).not.toContainText(articleSlug)
+  await expectListingDoesNotExpose(page, '/', articleTitle, articleSlug)
+  await expectListingDoesNotExpose(page, `/categories/${categorySlug}`, articleTitle, articleSlug)
+  await expectListingDoesNotExpose(page, '/archive', articleTitle, articleSlug)
+  await expectSearchDoesNotExpose(page, articleTitle, articleTitle)
+  await expectFeedAndSitemapDoNotExpose(page, articleTitle, articleSlug)
 })

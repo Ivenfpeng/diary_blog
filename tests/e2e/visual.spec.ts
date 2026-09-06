@@ -64,11 +64,42 @@ async function seedPublishedArticle(page: Page): Promise<void> {
 
 async function assertWithinViewport(page: Page, locator: Locator): Promise<void> {
   await expect(locator).toBeVisible()
+  await locator.scrollIntoViewIfNeeded()
   const box = await locator.boundingBox()
   expect(box, `${await locator.evaluate((element) => element.className || element.tagName)} has a layout box`).not.toBeNull()
   expect(box!.x).toBeGreaterThanOrEqual(-1)
   expect(box!.y).toBeGreaterThanOrEqual(-1)
   expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1)
+}
+
+async function assertCenterIsNotOccluded(page: Page, locator: Locator): Promise<void> {
+  await locator.scrollIntoViewIfNeeded()
+  const box = await locator.boundingBox()
+  expect(box, 'element has a box for occlusion testing').not.toBeNull()
+  const viewport = page.viewportSize()
+  expect(viewport, 'page has a viewport').not.toBeNull()
+  const point = {
+    x: Math.min(Math.max(box!.x + box!.width / 2, 1), viewport!.width - 1),
+    y: Math.min(Math.max(box!.y + Math.min(box!.height / 2, 48), 1), viewport!.height - 1),
+  }
+  const receivesPointer = await locator.evaluate((element, center) => {
+    const topElement = document.elementFromPoint(center.x, center.y)
+    return topElement === element || element.contains(topElement)
+  }, point)
+  expect(receivesPointer, `${await locator.evaluate((element) => element.className || element.tagName)} is not covered at its visible center`).toBe(true)
+}
+
+async function assertNoOverlap(page: Page, first: Locator, second: Locator, label: string): Promise<void> {
+  const [firstBox, secondBox] = await Promise.all([first.boundingBox(), second.boundingBox()])
+  expect(firstBox, `${label}: first element has a layout box`).not.toBeNull()
+  expect(secondBox, `${label}: second element has a layout box`).not.toBeNull()
+  const overlaps = !(
+    firstBox!.x + firstBox!.width <= secondBox!.x + 1 ||
+    secondBox!.x + secondBox!.width <= firstBox!.x + 1 ||
+    firstBox!.y + firstBox!.height <= secondBox!.y + 1 ||
+    secondBox!.y + secondBox!.height <= firstBox!.y + 1
+  )
+  expect(overlaps, label).toBe(false)
 }
 
 async function assertPageDoesNotOverflow(page: Page): Promise<void> {
@@ -89,7 +120,9 @@ test('public and administration layouts fit required desktop and mobile viewport
 
     await page.goto('/')
     await assertWithinViewport(page, page.locator('.site-header'))
+    await assertCenterIsNotOccluded(page, page.locator('.site-header'))
     await assertWithinViewport(page, page.getByRole('heading', { name: 'Latest writing' }))
+    await assertNoOverlap(page, page.locator('.site-header'), page.getByRole('heading', { name: 'Latest writing' }), `${viewport.name} public header does not overlap the listing title`)
     if (viewport.width <= 800) await assertWithinViewport(page, page.locator('.mobile-navigation summary'))
     else await assertWithinViewport(page, page.locator('.header-nav'))
     await assertPageDoesNotOverflow(page)
@@ -97,31 +130,45 @@ test('public and administration layouts fit required desktop and mobile viewport
 
     await page.goto(`/posts/${visualArticle.slug}`)
     await assertWithinViewport(page, page.locator('.article-header h1'))
+    await assertCenterIsNotOccluded(page, page.locator('.article-header h1'))
     await assertWithinViewport(page, page.locator('.prose'))
     await assertWithinViewport(page, page.locator('.prose pre'))
     if (viewport.width <= 800) await assertWithinViewport(page, page.locator('.mobile-table-of-contents'))
-    else await assertWithinViewport(page, page.locator('.desktop-table-of-contents'))
+    else {
+      await assertWithinViewport(page, page.locator('.desktop-table-of-contents'))
+      await assertNoOverlap(page, page.locator('.prose'), page.locator('.desktop-table-of-contents'), `${viewport.name} article body does not overlap the table of contents`)
+    }
     await assertPageDoesNotOverflow(page)
     await screenshot(page, testInfo, `${viewport.name}-article`)
 
     await page.goto('/admin/posts')
+    const adminTopbar = page.locator('.admin-topbar')
     if (viewport.width <= 720) {
       await assertWithinViewport(page, page.getByRole('button', { name: 'Open navigation' }))
       await page.getByRole('button', { name: 'Open navigation' }).click()
       await expect.poll(async () => (await page.locator('.admin-nav').boundingBox())?.x ?? -Infinity).toBeGreaterThanOrEqual(-1)
       await assertWithinViewport(page, page.locator('.admin-nav'))
+      await assertCenterIsNotOccluded(page, page.locator('.admin-nav'))
+      await assertNoOverlap(page, adminTopbar, page.locator('.admin-nav'), `${viewport.name} mobile admin topbar does not cover open navigation`)
       await page.getByRole('button', { name: 'Close navigation' }).click()
+      await expect.poll(async () => (await page.locator('.admin-nav').boundingBox())?.x ?? 0).toBeLessThanOrEqual(-220)
     } else {
       await assertWithinViewport(page, page.locator('.admin-nav'))
+      await assertNoOverlap(page, page.locator('.admin-nav'), page.getByRole('heading', { name: 'Posts' }), `${viewport.name} admin sidebar does not overlap content`)
     }
     await assertWithinViewport(page, page.getByRole('heading', { name: 'Posts' }))
+    await assertCenterIsNotOccluded(page, page.getByRole('heading', { name: 'Posts' }))
     await assertPageDoesNotOverflow(page)
     await screenshot(page, testInfo, `${viewport.name}-admin-list`)
 
     await page.getByRole('link', { name: visualArticle.title }).click()
     await assertWithinViewport(page, page.locator('#title'))
+    await assertCenterIsNotOccluded(page, page.locator('#title'))
     await assertWithinViewport(page, page.locator('[data-testid="markdown-editor"]'))
     await assertWithinViewport(page, page.locator('.publish-actions'))
+    await assertCenterIsNotOccluded(page, page.locator('.publish-actions'))
+    await assertNoOverlap(page, page.locator('#title'), page.locator('[data-testid="markdown-editor"]'), `${viewport.name} editor title does not overlap Markdown editor`)
+    await assertNoOverlap(page, page.locator('[data-testid="markdown-editor"]'), page.locator('.publish-actions'), `${viewport.name} Markdown editor does not overlap publish controls`)
     await assertPageDoesNotOverflow(page)
     await screenshot(page, testInfo, `${viewport.name}-editor`)
   }

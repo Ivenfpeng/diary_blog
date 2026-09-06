@@ -88,8 +88,23 @@ make release-gate
 git diff --check
 ```
 
-For the production runtime gate, also run the Compose health, backup, and
-restore rehearsal in the next sections.
+For the production runtime gate, seed or keep one published smoke article with
+an uploaded media image, then run:
+
+```sh
+make container-release-gate \
+  BACKUP=/data/backups/release-smoke.tar.gz \
+  SMOKE_ARTICLE_PATH=/posts/release-gate-publishing-workflow \
+  SMOKE_SEARCH_QUERY=durable
+```
+
+This builds the Compose image, starts the production topology, checks
+`/healthz` and `/readyz` through Caddy, creates the backup, restores it into a
+fresh temporary Docker volume, starts a one-off Blog container against that
+volume, and verifies the restored article route, search result, and first media
+asset referenced by the article HTML. Override `RESTORE_SMOKE_PORT`,
+`RESTORE_SMOKE_CONTAINER`, or `RESTORE_SMOKE_VOLUME` if the defaults conflict
+with another local smoke run.
 
 ## Production deployment with Compose
 
@@ -157,6 +172,14 @@ empty `blog_data` volume when rehearsing a restore. In the container topology
 the named volume is mounted at `/data`, while the application data directory is
 `/data/site`; that lets restore stage and rename directories inside the volume
 instead of trying to replace the mount point itself.
+
+To rehearse a restore into an isolated temporary volume and verify restored
+content through HTTP, run `make restore-smoke` after `make backup`. It copies
+the archive out of the running Blog container, restores it into the temporary
+volume, serves that volume on `127.0.0.1:18081`, checks the configured article
+path and search query, and curls the first `/media/...` asset found in the
+article HTML. The target removes the temporary container and volume when it
+finishes.
 
 ## Upgrading
 
