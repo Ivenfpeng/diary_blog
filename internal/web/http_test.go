@@ -109,7 +109,7 @@ func TestPublicServerServesEmbeddedAssetsAndHealthChecks(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	admin := getHTML(t, server.URL+"/admin")
-	if !strings.Contains(admin, "Diary Blog admin") {
+	if !strings.Contains(admin, "Diary Blog Admin") {
 		t.Fatalf("admin entry point did not serve embedded index\n%s", admin)
 	}
 	for _, path := range []string{"/static/site.css", "/healthz", "/readyz"} {
@@ -123,6 +123,20 @@ func TestPublicServerServesEmbeddedAssetsAndHealthChecks(t *testing.T) {
 		}
 		if response.Header.Get("X-Request-ID") == "" {
 			t.Fatalf("GET %s did not receive a request ID", path)
+		}
+	}
+}
+
+func TestAdminClientRoutesServeTheSPAEntryPoint(t *testing.T) {
+	repo, _, _, closeDB := publicFixture(t)
+	t.Cleanup(closeDB)
+	server := httptest.NewServer(web.NewServer(repo))
+	t.Cleanup(server.Close)
+
+	for _, path := range []string{"/admin/login", "/admin/posts/42"} {
+		body := getHTML(t, server.URL+path)
+		if !strings.Contains(body, "Diary Blog Admin") {
+			t.Fatalf("GET %s did not serve the admin entry point\n%s", path, body)
 		}
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Ivenfpeng/diary_blog/internal/auth"
@@ -109,7 +110,15 @@ func NewServer(repository posts.Repository, options ...ServerOptions) http.Handl
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(adminIndex)
 	})
-	router.Handle("/admin/*", http.StripPrefix("/admin/", http.FileServer(http.FS(admin))))
+	adminStatic := http.StripPrefix("/admin/", http.FileServer(http.FS(admin)))
+	router.Handle("/admin/*", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(filepath.Base(r.URL.Path), ".") {
+			adminStatic.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write(adminIndex)
+	}))
 	if config.MediaDir == "" {
 		router.Handle("/media/*", http.NotFoundHandler())
 	} else {

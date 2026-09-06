@@ -39,7 +39,7 @@ a:focus-visible {
 .nav-link.router-link-active { color: #fff; background: #2a4136; }
 .nav-link-disabled { color: #708077; cursor: not-allowed; }
 .admin-workspace { min-width: 0; flex: 1; }
-.admin-topbar { height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 24px; border-bottom: 1px solid #dce3de; background: #fff; }
+.admin-topbar { position: relative; z-index: 3; height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 24px; border-bottom: 1px solid #dce3de; background: #fff; }
 .workspace-title { font-size: 14px; font-weight: 650; }
 .session-user { margin-left: auto; color: #56655d; font-size: 13px; }
 .icon-button { display: inline-grid; width: 36px; height: 36px; place-items: center; border: 1px solid transparent; color: #33433a; background: transparent; cursor: pointer; }

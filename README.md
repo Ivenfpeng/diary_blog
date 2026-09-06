@@ -55,6 +55,42 @@ make build
 `/tmp/diary-blog-go-cache` by default. Override it with `GO_CACHE=/path` if
 needed.
 
+### End-to-end release gate
+
+Install the root browser-test dependencies once. The default local gate uses an
+installed Google Chrome channel because that browser is already available on
+this development host.
+
+```sh
+npm ci
+npm run test:e2e
+```
+
+On a clean machine without Chrome, install Playwright's bundled Chromium and
+set `PLAYWRIGHT_BUNDLED_CHROMIUM=1` when running the gate:
+
+```sh
+npx playwright install chromium
+PLAYWRIGHT_BUNDLED_CHROMIUM=1 npm run test:e2e
+```
+
+`npm run test:e2e` rebuilds and embeds the administration application before
+starting an isolated Blog server with temporary data. It verifies login,
+authoring, media upload, preview, publication, discovery, revision restore,
+and public exclusion of drafts and archived articles. It also writes the home,
+article, administration-list, and editor screenshots for 1440×1000,
+1024×768, 390×844, and 360×800 to `/tmp/diary-blog-e2e-results`.
+
+Run the non-container release gate with:
+
+```sh
+make release-gate
+git diff --check
+```
+
+For the production runtime gate, also run the Compose health, backup, and
+restore rehearsal in the next sections.
+
 ## Production deployment with Compose
 
 Create an environment file next to `compose.yaml` with the public hostname and

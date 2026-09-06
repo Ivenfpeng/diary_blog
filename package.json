@@ -1,0 +1,11 @@
+{
+  "name": "diary-blog-release-gate",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "npm --prefix admin run build && make sync-admin && playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}

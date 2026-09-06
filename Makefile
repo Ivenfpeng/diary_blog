@@ -4,13 +4,16 @@ GO_CACHE ?= /tmp/diary-blog-go-cache
 BACKUP ?= /data/backups/backup.tar.gz
 RESTORE ?= $(BACKUP)
 
-.PHONY: test-go test-admin test vet admin-build sync-admin build dev container-build compose-up compose-down compose-ps compose-logs backup restore
+.PHONY: test-go test-admin test-e2e test vet admin-build sync-admin build release-gate dev container-build compose-up compose-down compose-ps compose-logs backup restore
 
 test-go:
 	GOCACHE=$(GO_CACHE) go test ./...
 
 test-admin:
 	$(NODE_ENV) npm --prefix admin test
+
+test-e2e:
+	$(NODE_ENV) npm run test:e2e
 
 test: test-go test-admin
 
@@ -26,6 +29,8 @@ sync-admin:
 
 build: admin-build sync-admin
 	go build -o bin/blog ./cmd/blog
+
+release-gate: test-go test-admin admin-build test-e2e vet
 
 dev:
 	go run ./cmd/blog serve
