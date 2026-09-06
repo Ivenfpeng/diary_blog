@@ -101,11 +101,16 @@ async function preview(): Promise<void> {
   editor.previewHTML.value = response.html
 }
 async function publish(): Promise<void> {
-  if (!canPublish.value) return
-  if (editor.dirty.value) await editor.save()
-  if (editor.dirty.value || editor.conflict.value) return
-  const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${editor.article.id}/publish`, { method: 'POST', body: { expected_revision: editor.revision.value } })
-  editor.load(response.post)
+  if (!canPublish.value || destructiveActionInFlight.value) return
+  destructiveActionInFlight.value = true
+  try {
+    if (editor.dirty.value) await editor.save()
+    if (editor.dirty.value || editor.conflict.value) return
+    const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${editor.article.id}/publish`, { method: 'POST', body: { expected_revision: editor.revision.value } })
+    editor.load(response.post)
+  } finally {
+    destructiveActionInFlight.value = false
+  }
 }
 async function archive(): Promise<void> {
   if (destructiveActionsLocked.value) return

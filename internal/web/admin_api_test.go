@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -323,6 +324,62 @@ func TestSettingsManagementAPIValidatesInput(t *testing.T) {
 	saved := adminRequest(t, server, session, csrf, http.MethodPut, "/api/admin/settings", map[string]any{"site_title": "Diary", "description": "Notes", "author": "Iven"})
 	if saved.StatusCode != http.StatusOK {
 		t.Fatalf("save settings = %d: %s", saved.StatusCode, readBody(t, saved))
+	}
+}
+
+func TestSettingsUpdateInvalidatesWarmedPublicPagesAndFeeds(t *testing.T) {
+	cache := site.NewCache(time.Hour)
+	server, _, session, csrf := newAdminServerWithCache(t, cache)
+
+	warm, err := server.Client().Get(server.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = warm.Body.Close()
+	if cache.EntryCount() == 0 {
+		t.Fatal("public page did not warm the cache")
+	}
+	response := adminRequest(t, server, session, csrf, http.MethodPut, "/api/admin/settings", map[string]any{
+		"site_title": "Iven Notes", "description": "Careful systems", "author": "Iven",
+		"navigation":   []map[string]string{{"label": "About", "url": "/archive"}},
+		"social_links": map[string]string{"GitHub": "https://github.com/Ivenfpeng"},
+		"seo_defaults": map[string]string{"title_suffix": "Engineering Notes", "robots": "index,follow"},
+	})
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("save settings = %d: %s", response.StatusCode, readBody(t, response))
+	}
+	_ = response.Body.Close()
+	if cache.EntryCount() != 0 {
+		t.Fatalf("settings update retained %d warmed cache entries", cache.EntryCount())
+	}
+
+	page, err := server.Client().Get(server.URL + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pageBody, err := io.ReadAll(page.Body)
+	_ = page.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Iven Notes", "Articles · Engineering Notes", `href="/archive">About</a>`, "Iven", "https://github.com/Ivenfpeng"} {
+		if !strings.Contains(string(pageBody), want) {
+			t.Fatalf("updated public page missing %q\n%s", want, pageBody)
+		}
+	}
+	feed, err := server.Client().Get(server.URL + "/rss.xml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	feedBody, err := io.ReadAll(feed.Body)
+	_ = feed.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"<title>Iven Notes</title>", "<description>Careful systems</description>", "<managingEditor>Iven</managingEditor>"} {
+		if !strings.Contains(string(feedBody), want) {
+			t.Fatalf("updated feed missing %q\n%s", want, feedBody)
+		}
 	}
 }
 

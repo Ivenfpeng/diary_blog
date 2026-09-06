@@ -81,6 +81,9 @@ h2 { font-size: 1.35rem; margin: 0; }
 .error-page { padding: var(--space-5) 0; }
 .text-link { font-family: ui-monospace, "SFMono-Regular", monospace; }
 .site-footer { width: min(88rem, 100%); margin: 0 auto; padding: var(--space-3); border-top: 1px solid var(--neutral-300); color: var(--neutral-700); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: .72rem; }
+.site-footer a { color: var(--forest-800); }
+.pagination { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); padding: var(--space-4) 0; font-family: ui-monospace, "SFMono-Regular", monospace; font-size: .78rem; }
+.pagination a { color: var(--forest-800); font-weight: 700; }
 
 @media (max-width: 50rem) {
   .site-header { min-height: 4rem; }

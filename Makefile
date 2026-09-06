@@ -5,6 +5,7 @@ BACKUP ?= /data/backups/backup.tar.gz
 RESTORE ?= $(BACKUP)
 RESTORE_SMOKE_CONTAINER ?= diary-blog-restore-smoke
 RESTORE_SMOKE_VOLUME ?= diary_blog_restore_smoke
+RESTORE_SMOKE_STAGING_VOLUME ?= diary_blog_restore_smoke_staging
 RESTORE_SMOKE_PORT ?= 18081
 SMOKE_ARTICLE_PATH ?= /posts/release-gate-publishing-workflow
 SMOKE_SEARCH_QUERY ?= durable
@@ -70,14 +71,17 @@ restore:
 	docker compose up -d blog
 
 restore-smoke:
+	set -eu; \
 	tmp_dir=$$(mktemp -d); \
-	cleanup() { docker rm -f $(RESTORE_SMOKE_CONTAINER) >/dev/null 2>&1 || true; docker volume rm -f $(RESTORE_SMOKE_VOLUME) >/dev/null 2>&1 || true; rm -rf "$$tmp_dir"; }; \
+	cleanup() { docker rm -f $(RESTORE_SMOKE_CONTAINER) >/dev/null 2>&1 || true; docker volume rm -f $(RESTORE_SMOKE_VOLUME) >/dev/null 2>&1 || true; docker volume rm -f $(RESTORE_SMOKE_STAGING_VOLUME) >/dev/null 2>&1 || true; rm -rf "$$tmp_dir"; }; \
 	trap cleanup EXIT; \
 	docker rm -f $(RESTORE_SMOKE_CONTAINER) >/dev/null 2>&1 || true; \
 	docker volume rm -f $(RESTORE_SMOKE_VOLUME) >/dev/null 2>&1 || true; \
-	docker volume create $(RESTORE_SMOKE_VOLUME); \
-	docker compose cp blog:$(RESTORE) "$$tmp_dir/release-smoke.tar.gz"; \
-	docker compose run --rm --no-deps -v $(RESTORE_SMOKE_VOLUME):/data -v "$$tmp_dir:/restore:ro" blog restore --input /restore/release-smoke.tar.gz --force; \
+	docker volume rm -f $(RESTORE_SMOKE_STAGING_VOLUME) >/dev/null 2>&1 || true; \
+	docker volume create $(RESTORE_SMOKE_VOLUME) >/dev/null; \
+	docker volume create $(RESTORE_SMOKE_STAGING_VOLUME) >/dev/null; \
+	docker compose run --rm --no-deps --user 0 --entrypoint /bin/sh -e RESTORE_SOURCE=$(RESTORE) -v $(RESTORE_SMOKE_STAGING_VOLUME):/staging blog -ec 'cp "$$RESTORE_SOURCE" /staging/release-smoke.tar.gz; chmod 0444 /staging/release-smoke.tar.gz'; \
+	docker compose run --rm --no-deps -v $(RESTORE_SMOKE_VOLUME):/data -v $(RESTORE_SMOKE_STAGING_VOLUME):/restore:ro blog restore --input /restore/release-smoke.tar.gz --force; \
 	image_id=$$(docker compose images -q blog); \
 	test -n "$$image_id"; \
 	docker run -d --rm --name $(RESTORE_SMOKE_CONTAINER) -p 127.0.0.1:$(RESTORE_SMOKE_PORT):8080 -v $(RESTORE_SMOKE_VOLUME):/data -e BLOG_ADDR=:8080 -e BLOG_DATA_DIR=/data/site -e BLOG_PUBLIC_URL=http://localhost:$(RESTORE_SMOKE_PORT) "$$image_id" serve; \
@@ -85,7 +89,9 @@ restore-smoke:
 	curl --fail -s http://127.0.0.1:$(RESTORE_SMOKE_PORT)/readyz >/dev/null; \
 	curl --fail -s "http://127.0.0.1:$(RESTORE_SMOKE_PORT)$(SMOKE_ARTICLE_PATH)" > "$$tmp_dir/article.html"; \
 	grep -q "$(SMOKE_SEARCH_QUERY)" "$$tmp_dir/article.html"; \
-	media_path=$$(grep -Eo '/media/[^" ]+' "$$tmp_dir/article.html" | head -n 1); \
+	grep -Eo '/media/[^" ]+' "$$tmp_dir/article.html" > "$$tmp_dir/media-paths.txt"; \
+	media_path=$$(head -n 1 "$$tmp_dir/media-paths.txt"); \
 	test -n "$$media_path"; \
 	curl --fail -s "http://127.0.0.1:$(RESTORE_SMOKE_PORT)$$media_path" >/dev/null; \
-	curl --fail -s "http://127.0.0.1:$(RESTORE_SMOKE_PORT)/search?q=$(SMOKE_SEARCH_QUERY)" | grep -q "$(SMOKE_ARTICLE_PATH)"
+	curl --fail -s "http://127.0.0.1:$(RESTORE_SMOKE_PORT)/search?q=$(SMOKE_SEARCH_QUERY)" > "$$tmp_dir/search.html"; \
+	grep -q "$(SMOKE_ARTICLE_PATH)" "$$tmp_dir/search.html"

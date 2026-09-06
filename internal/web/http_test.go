@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -35,6 +36,62 @@ func TestPublicHomeUsesCacheUntilPublicationInvalidation(t *testing.T) {
 	cache.InvalidatePublication("reading-safely")
 	if body := getHTML(t, server.URL+"/"); !strings.Contains(body, "Reading Safely") {
 		t.Fatalf("home after invalidation did not render repository data: %s", body)
+	}
+}
+
+func TestPublicCacheDoesNotRetainUnknownTaxonomyPages(t *testing.T) {
+	repo, _, _, closeDB := publicFixture(t)
+	t.Cleanup(closeDB)
+	cache := site.NewCache(time.Hour)
+	server := httptest.NewServer(web.NewServer(repo, web.ServerOptions{Cache: cache}))
+	t.Cleanup(server.Close)
+
+	for _, path := range []string{"/categories/missing-one", "/categories/missing-two", "/tags/missing-three"} {
+		response, err := http.Get(server.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusNotFound {
+			t.Fatalf("GET %s status = %d, want 404", path, response.StatusCode)
+		}
+	}
+	if cache.EntryCount() != 0 {
+		t.Fatalf("cache retained %d unknown taxonomy pages", cache.EntryCount())
+	}
+}
+
+func TestPublicCacheDoesNotResurrectContentInvalidatedDuringRender(t *testing.T) {
+	repo, published, _, closeDB := publicFixture(t)
+	t.Cleanup(closeDB)
+	cache := site.NewCache(time.Hour)
+	blocking := &blockingListRepository{Repository: repo, started: make(chan struct{}), release: make(chan struct{})}
+	server := httptest.NewServer(web.NewServer(blocking, web.ServerOptions{Cache: cache}))
+	t.Cleanup(server.Close)
+
+	firstBody := make(chan string, 1)
+	go func() {
+		response, err := http.Get(server.URL + "/")
+		if err != nil {
+			firstBody <- "request error: " + err.Error()
+			return
+		}
+		defer response.Body.Close()
+		body, _ := io.ReadAll(response.Body)
+		firstBody <- string(body)
+	}()
+	<-blocking.started
+	service := posts.NewService(repo, content.NewRenderer(), func() time.Time { return time.Date(2026, 9, 4, 13, 0, 0, 0, time.UTC) })
+	if _, err := service.Archive(context.Background(), published.ID, published.Revision); err != nil {
+		t.Fatal(err)
+	}
+	cache.InvalidatePublication(published.Slug)
+	close(blocking.release)
+	if body := <-firstBody; !strings.Contains(body, "Reading Safely") {
+		t.Fatalf("in-flight response did not contain its original snapshot: %s", body)
+	}
+	if body := getHTML(t, server.URL+"/"); strings.Contains(body, "Reading Safely") {
+		t.Fatalf("next request received stale content inserted after invalidation: %s", body)
 	}
 }
 
@@ -377,6 +434,59 @@ func TestEmptySearchRendersInstructionsWithoutFTS(t *testing.T) {
 	}
 }
 
+func TestPublicListingsAndSearchPaginateBeyondTwentyArticles(t *testing.T) {
+	repo, _, db, closeDB := publicFixture(t)
+	t.Cleanup(closeDB)
+	publishPaginationPosts(t, repo, db, 21)
+	cache := site.NewCache(time.Hour)
+	server := httptest.NewServer(web.NewServer(repo, web.ServerOptions{Cache: cache}))
+	t.Cleanup(server.Close)
+
+	checks := []struct {
+		path         string
+		canonical    string
+		previousHref string
+	}{
+		{"/?page=2", defaultPublicURL + "/?page=2", `href="/"`},
+		{"/archive?page=2", defaultPublicURL + "/archive?page=2", `href="/archive"`},
+		{"/categories/databases?page=2", defaultPublicURL + "/categories/databases?page=2", `href="/categories/databases"`},
+		{"/tags/go?page=2", defaultPublicURL + "/tags/go?page=2", `href="/tags/go"`},
+		{"/search?q=paginationtoken&page=2", defaultPublicURL + "/search?page=2", `href="/search?q=paginationtoken"`},
+	}
+	for _, check := range checks {
+		t.Run(check.path, func(t *testing.T) {
+			body := getHTML(t, server.URL+check.path)
+			for _, want := range []string{"Pagination article 00", `rel="prev"`, check.previousHref, `<link rel="canonical" href="` + check.canonical + `">`} {
+				if !strings.Contains(body, want) {
+					t.Fatalf("GET %s missing %q\n%s", check.path, want, body)
+				}
+			}
+		})
+	}
+	if cache.EntryCount() != 4 {
+		t.Fatalf("listing cache entries = %d, want one page-aware entry per cached listing", cache.EntryCount())
+	}
+}
+
+func TestPublicPaginationRejectsInvalidPage(t *testing.T) {
+	repo, _, _, closeDB := publicFixture(t)
+	t.Cleanup(closeDB)
+	cache := site.NewCache(time.Hour)
+	server := httptest.NewServer(web.NewServer(repo, web.ServerOptions{Cache: cache}))
+	t.Cleanup(server.Close)
+	_ = getHTML(t, server.URL+"/")
+	for _, path := range []string{"/?page=0", "/archive?page=word", "/search?q=Go&page=-1"} {
+		response, err := http.Get(server.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = response.Body.Close()
+		if response.StatusCode != http.StatusBadRequest {
+			t.Fatalf("GET %s status = %d, want 400", path, response.StatusCode)
+		}
+	}
+}
+
 func TestRSSAndSitemapOnlyExposePublishedPosts(t *testing.T) {
 	repo, _, _, closeDB := publicFixture(t)
 	t.Cleanup(closeDB)
@@ -418,6 +528,53 @@ func TestRSSAndSitemapOnlyExposePublishedPosts(t *testing.T) {
 type searchSpyRepository struct {
 	posts.Repository
 	searchCalls int
+}
+
+type blockingListRepository struct {
+	posts.Repository
+	started chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (r *blockingListRepository) ListPublished(ctx context.Context, filter posts.PublishedFilter) ([]posts.PublishedPost, int, error) {
+	items, total, err := r.Repository.ListPublished(ctx, filter)
+	if err == nil && filter.Page == 1 {
+		r.once.Do(func() {
+			close(r.started)
+			<-r.release
+		})
+	}
+	return items, total, err
+}
+
+func publishPaginationPosts(t *testing.T, repository posts.Repository, db *sql.DB, count int) {
+	t.Helper()
+	var categoryID, tagID int64
+	if err := db.QueryRow(`SELECT id FROM categories WHERE slug = ?`, "databases").Scan(&categoryID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT id FROM tags WHERE slug = ?`, "go").Scan(&tagID); err != nil {
+		t.Fatal(err)
+	}
+	service := posts.NewService(repository, content.NewRenderer(), func() time.Time { return time.Date(2026, 9, 4, 14, 0, 0, 0, time.UTC) })
+	for index := 0; index < count; index++ {
+		suffix := string(rune('a'+index/26)) + string(rune('a'+index%26))
+		post, err := service.CreateDraft(context.Background(), content.PostInput{
+			Slug: "pagination-" + suffix, Title: "Pagination article " + twoDigits(index),
+			Summary: "paginationtoken", ContentMD: "paginationtoken", CategoryID: &categoryID, TagIDs: []int64{tagID},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := service.Publish(context.Background(), post.ID, post.Revision); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func twoDigits(value int) string {
+	return string(rune('0'+value/10)) + string(rune('0'+value%10))
 }
 
 func (r *searchSpyRepository) SearchPublished(ctx context.Context, query string, page, pageSize int) ([]posts.PublishedPost, int, error) {

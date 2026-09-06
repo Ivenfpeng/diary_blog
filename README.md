@@ -17,14 +17,13 @@ When Homebrew's Node 24 is not already on your shell path, run:
 export PATH="$(brew --prefix node@24)/bin:$PATH"
 ```
 
-Install the admin dependencies and build its static files before building the
-Go binary. The admin build is copied into `web/admin`, which is embedded into
-the binary.
+Install the admin dependencies, then use the project build target. It builds
+the admin application, copies it into `web/admin`, and embeds those files in
+the Go binary.
 
 ```sh
 npm --prefix admin ci
-npm --prefix admin run build
-go build -o bin/blog ./cmd/blog
+make build
 ```
 
 Create the first administrator (or reset an existing administrator password):

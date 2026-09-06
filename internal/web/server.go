@@ -88,7 +88,7 @@ func NewServer(repository posts.Repository, options ...ServerOptions) http.Handl
 		authAPI.routes(router)
 		newAdminPostAPI(posts.NewService(repository, nil, config.Clock), config.Cache).routes(router, authAPI.requireSession, authAPI.requireCSRF)
 		if managementRepository, ok := repository.(*sqlite.PostRepository); ok {
-			newAdminManagementAPI(managementRepository, config.MediaDir, config.Clock).routes(router, authAPI.requireSession, authAPI.requireCSRF)
+			newAdminManagementAPI(managementRepository, config.MediaDir, config.Clock, config.Cache).routes(router, authAPI.requireSession, authAPI.requireCSRF)
 		}
 		authAPI.adminNotFound(router)
 	}

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/Ivenfpeng/diary_blog/internal/repository/sqlite"
+	"github.com/Ivenfpeng/diary_blog/internal/site"
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/image/webp"
 )
@@ -30,6 +31,7 @@ type adminManagementAPI struct {
 	repository *sqlite.PostRepository
 	mediaDir   string
 	clock      func() time.Time
+	cache      *site.Cache
 }
 type taxonomyRequest struct {
 	Name string `json:"name"`
@@ -39,8 +41,8 @@ type mediaAltRequest struct {
 	AltText string `json:"alt_text"`
 }
 
-func newAdminManagementAPI(repository *sqlite.PostRepository, mediaDir string, clock func() time.Time) *adminManagementAPI {
-	return &adminManagementAPI{repository: repository, mediaDir: mediaDir, clock: clock}
+func newAdminManagementAPI(repository *sqlite.PostRepository, mediaDir string, clock func() time.Time, cache *site.Cache) *adminManagementAPI {
+	return &adminManagementAPI{repository: repository, mediaDir: mediaDir, clock: clock, cache: cache}
 }
 func (a *adminManagementAPI) routes(router chi.Router, requireSession, requireCSRF func(http.Handler) http.Handler) {
 	router.Group(func(router chi.Router) {
@@ -195,6 +197,9 @@ func (a *adminManagementAPI) saveSettings(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		a.writeError(w, r, err)
 		return
+	}
+	if a.cache != nil {
+		a.cache.InvalidateAll()
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"settings": saved})
 }

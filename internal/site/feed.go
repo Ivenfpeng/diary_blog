@@ -17,13 +17,20 @@ const rssLimit = 20
 
 // RSS generates a feed for the immutable posts published by the site.
 type RSS struct {
-	baseURL *url.URL
-	now     func() time.Time
+	baseURL     *url.URL
+	now         func() time.Time
+	title       string
+	description string
+	author      string
 }
 
 // NewRSS configures an RSS generator with the public canonical URL and a
 // clock. Keeping both dependencies explicit makes output repeatable.
 func NewRSS(publicBaseURL string, now func() time.Time) (*RSS, error) {
+	return NewRSSWithIdentity(publicBaseURL, now, "Diary Blog", "Diary Blog RSS feed", "")
+}
+
+func NewRSSWithIdentity(publicBaseURL string, now func() time.Time, title, description, author string) (*RSS, error) {
 	baseURL, err := parsePublicBaseURL(publicBaseURL)
 	if err != nil {
 		return nil, err
@@ -31,7 +38,15 @@ func NewRSS(publicBaseURL string, now func() time.Time) (*RSS, error) {
 	if now == nil {
 		return nil, fmt.Errorf("RSS clock is required")
 	}
-	return &RSS{baseURL: baseURL, now: now}, nil
+	title = strings.TrimSpace(title)
+	description = strings.TrimSpace(description)
+	if title == "" {
+		title = "Diary Blog"
+	}
+	if description == "" {
+		description = title + " RSS feed"
+	}
+	return &RSS{baseURL: baseURL, now: now, title: title, description: description, author: strings.TrimSpace(author)}, nil
 }
 
 // Generate emits the newest twenty published entries in a stable order.
@@ -42,11 +57,12 @@ func (r *RSS) Generate(postsToPublish []posts.PublishedPost) ([]byte, error) {
 	}
 	document := rssDocument{Version: "2.0"}
 	document.Channel = rssChannel{
-		Title:         "Diary Blog",
-		Link:          absoluteURL(r.baseURL),
-		Description:   "Diary Blog RSS feed",
-		LastBuildDate: r.now().UTC().Format(time.RFC1123Z),
-		Items:         make([]rssItem, 0, len(items)),
+		Title:          r.title,
+		Link:           absoluteURL(r.baseURL),
+		Description:    r.description,
+		ManagingEditor: r.author,
+		LastBuildDate:  r.now().UTC().Format(time.RFC1123Z),
+		Items:          make([]rssItem, 0, len(items)),
 	}
 	for _, post := range items {
 		link := r.urlFor("posts", post.Slug)
@@ -68,11 +84,12 @@ type rssDocument struct {
 }
 
 type rssChannel struct {
-	Title         string    `xml:"title"`
-	Link          string    `xml:"link"`
-	Description   string    `xml:"description"`
-	LastBuildDate string    `xml:"lastBuildDate"`
-	Items         []rssItem `xml:"item"`
+	Title          string    `xml:"title"`
+	Link           string    `xml:"link"`
+	Description    string    `xml:"description"`
+	ManagingEditor string    `xml:"managingEditor,omitempty"`
+	LastBuildDate  string    `xml:"lastBuildDate"`
+	Items          []rssItem `xml:"item"`
 }
 
 type rssItem struct {

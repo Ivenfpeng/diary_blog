@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="{{.Description}}">
 	<meta name="robots" content="{{.Robots}}">
-    <title>{{.Title}} · Diary Blog</title>
+    <title>{{.Title}} · {{.TitleSuffix}}</title>
     {{if .CanonicalURL}}<link rel="canonical" href="{{.CanonicalURL}}">{{end}}
 	<meta property="og:title" content="{{.OpenGraphTitle}}">
 	<meta property="og:description" content="{{.OpenGraphDescription}}">
@@ -19,8 +19,8 @@
   <body>
     <a class="skip-link" href="#main-content">Skip to content</a>
     <header class="site-header">
-      <a class="wordmark" href="/">DIARY / KB</a>
-      <nav class="header-nav" aria-label="Primary navigation"><a href="/">Articles</a><a href="/archive">Archive</a></nav>
+      <a class="wordmark" href="/">{{.SiteTitle}}</a>
+      <nav class="header-nav" aria-label="Primary navigation"><a href="/">Articles</a><a href="/archive">Archive</a>{{range .Navigation}}<a href="{{.URL}}">{{.Label}}</a>{{end}}</nav>
       <details class="mobile-navigation">
         <summary>Browse topics</summary>
         <nav aria-label="Mobile taxonomy"><a href="/">All writing</a><a href="/archive">By year</a>{{range .Categories}}<a href="/categories/{{.Slug}}">{{.Name}}</a>{{end}}{{range .Tags}}<a href="/tags/{{.Slug}}">{{.Name}}</a>{{end}}</nav>
@@ -40,7 +40,17 @@
       </aside>
       <main id="main-content">{{template "page" .}}</main>
     </div>
-    <footer class="site-footer">Built for durable notes and careful reading.</footer>
+    <footer class="site-footer">{{if .SiteAuthor}}By {{.SiteAuthor}}. {{end}}Built for durable notes and careful reading.{{range .SocialLinks}} <a href="{{.URL}}">{{.Label}}</a>{{end}}</footer>
   </body>
 </html>
+{{end}}
+
+{{define "pagination"}}
+{{if or .PreviousURL .NextURL}}
+<nav class="pagination" aria-label="Pagination">
+  {{if .PreviousURL}}<a rel="prev" href="{{.PreviousURL}}">← Previous</a>{{end}}
+  <span>Page {{.CurrentPage}} of {{.TotalPages}}</span>
+  {{if .NextURL}}<a rel="next" href="{{.NextURL}}">Next →</a>{{end}}
+</nav>
+{{end}}
 {{end}}

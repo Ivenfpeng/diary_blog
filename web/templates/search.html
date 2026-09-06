@@ -19,6 +19,7 @@
   </article>
   {{else}}<p class="empty-state">No published articles matched that search.</p>{{end}}
 </section>
+{{template "pagination" .}}
 {{else}}
 <p class="empty-state">Enter a word or phrase to search published articles.</p>
 {{end}}

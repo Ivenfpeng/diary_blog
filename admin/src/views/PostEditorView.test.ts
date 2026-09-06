@@ -167,4 +167,37 @@ describe('PostEditorView', () => {
     await vi.waitFor(() => expect(wrapper.get('#title').attributes('disabled')).toBeUndefined())
     wrapper.unmount()
   })
+
+  it('blocks edits while publication is pending so the response cannot discard newer input', async () => {
+    const post = {
+      id: 7, slug: 'valid-slug', title: 'Ready to publish', summary: '', content_md: '# Ready', status: 'draft',
+      category_id: null, tag_ids: [], revision: 3,
+    }
+    const pending = deferred<{ post: typeof post }>()
+    mockedClient.apiRequest.mockImplementation((path = '') => {
+      if (path === '/api/admin/posts/7/publish') return pending.promise
+      if (path.endsWith('/revisions')) return Promise.resolve({ revisions: [] })
+      return Promise.resolve({ post })
+    })
+    const MarkdownEditorStub = { name: 'MarkdownEditor', props: ['modelValue', 'disabled'], emits: ['update:modelValue'], template: '<textarea data-testid="markdown-editor" :disabled="disabled" />' }
+    const PublishPanelStub = { name: 'PublishPanel', props: ['canPublish', 'saving'], emits: ['publish'], template: '<button name="publish" :disabled="!canPublish || saving" @click="$emit(\'publish\')">Publish</button>' }
+    const wrapper = mount(PostEditorView, {
+      global: { stubs: { RouterLink: { template: '<a><slot /></a>' }, MarkdownEditor: MarkdownEditorStub, PublishPanel: PublishPanelStub, RevisionPanel: true } },
+    })
+    await vi.waitFor(() => expect(wrapper.find('.editor-form').exists()).toBe(true))
+
+    wrapper.findComponent(PublishPanelStub).vm.$emit('publish')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('#title').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="markdown-editor"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('#title').setValue('Typed during publish')
+    wrapper.findComponent(MarkdownEditorStub).vm.$emit('update:modelValue', '# Typed during publish')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.get('#editor-heading').text()).toBe('Ready to publish')
+
+    pending.resolve({ post: { ...post, status: 'published', revision: 4 } })
+    await vi.waitFor(() => expect(wrapper.get('#title').attributes('disabled')).toBeUndefined())
+    expect(wrapper.get('#editor-heading').text()).toBe('Ready to publish')
+    wrapper.unmount()
+  })
 })

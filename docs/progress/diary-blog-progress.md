@@ -84,7 +84,7 @@
 | R-003 | 低 | 已缓解 | Go 官方模块代理曾超时 | 依赖已缓存；测试使用独立可写 `GOCACHE` |
 | R-004 | 中 | 已裁定 | v2 结构无法还原最后一次成功发布的完整元数据 | 迁移不自动创建公开快照；旧文章须显式重新发布，避免泄露草稿 |
 | R-005 | 中 | 已解决 | 配置 URL 含转义路径前缀时 RSS/Sitemap 可能重复编码 | 已统一 URL Path/RawPath 处理并通过专项审查 |
-| R-006 | 中 | 待后续 | Caddy 反向代理场景需显式配置可信代理 CIDR，否则登录限流会按直接 peer 计数 | Task 13/15 运维与部署配置阶段接入运行时配置 |
+| R-006 | 中 | 已解决 | Caddy 反向代理场景需显式配置可信代理 CIDR，否则登录限流会按直接 peer 计数 | Task 15 已通过 `BLOG_TRUSTED_PROXY_CIDRS` 接入运行时配置并在 Compose 中限定为 Caddy 固定地址；Docker 实测仍由 R-010/R-013 跟踪 |
 | R-007 | 低 | 已裁定 | AVIF 上传校验当前验证 ISO-BMFF/AVIF 元数据、属性关联和数据 extent，不做 AV1 像素级解码 | Task 12 先采用严格结构门禁；若后续接入维护良好的 AVIF decoder，可替换为像素级验证 |
 | R-008 | 低 | 已裁定 | 备份 manifest 写在 archive 最后，无法包含自身 checksum | Manifest 校验所有 payload entry；restore 拒绝 manifest 后额外条目和 payload checksum 不匹配 |
 | R-009 | 中 | 已裁定 | 备份/恢复当前限制为 10,000 entries、单 entry 64 MiB、payload 总量 512 MiB、manifest 1 MiB | 首版用对称限制避免生成不可恢复备份；大站点后续需同步提高常量与测试 |

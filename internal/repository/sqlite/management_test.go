@@ -68,7 +68,18 @@ func TestMediaMetadataAndSettingsValidation(t *testing.T) {
 	if _, err := repo.SaveSettings(ctx, sqliterepo.Settings{SiteTitle: "Diary", SocialLinks: []byte(`[]`)}, now); !errors.Is(err, sqliterepo.ErrValidation) {
 		t.Fatalf("array social links = %v, want validation", err)
 	}
-	saved, err := repo.SaveSettings(ctx, sqliterepo.Settings{SiteTitle: "Diary", Description: "Notes", Author: "Iven"}, now)
+	if _, err := repo.SaveSettings(ctx, sqliterepo.Settings{SiteTitle: "Diary", Navigation: []byte(`[{"label":"Unsafe","url":"javascript:alert(1)"}]`)}, now); !errors.Is(err, sqliterepo.ErrValidation) {
+		t.Fatalf("unsafe navigation = %v, want validation", err)
+	}
+	if _, err := repo.SaveSettings(ctx, sqliterepo.Settings{SiteTitle: "Diary", SEODefaults: []byte(`{"robots":"allow-everything"}`)}, now); !errors.Is(err, sqliterepo.ErrValidation) {
+		t.Fatalf("invalid SEO defaults = %v, want validation", err)
+	}
+	saved, err := repo.SaveSettings(ctx, sqliterepo.Settings{
+		SiteTitle: "Diary", Description: "Notes", Author: "Iven",
+		Navigation:  []byte(`[{"label":"Archive","url":"/archive"}]`),
+		SocialLinks: []byte(`{"GitHub":"https://github.com/Ivenfpeng"}`),
+		SEODefaults: []byte(`{"title_suffix":"Engineering Notes","robots":"index,follow"}`),
+	}, now)
 	if err != nil {
 		t.Fatal(err)
 	}
