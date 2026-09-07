@@ -12,8 +12,11 @@ RUN npm run build
 FROM golang:1.27-alpine AS go-build
 WORKDIR /src
 
+ARG GOPROXY=https://proxy.golang.org,direct
+ARG GOSUMDB=sum.golang.org
+
 COPY go.mod go.sum ./
-RUN go mod download
+RUN GOPROXY="${GOPROXY}" GOSUMDB="${GOSUMDB}" go mod download
 
 COPY . ./
 COPY --from=admin-build /src/admin/dist ./web/admin

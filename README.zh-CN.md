@@ -200,6 +200,7 @@ docker login ghcr.io -u Ivenfpeng
 
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
+  --build-arg GOPROXY=https://goproxy.cn,direct \
   -t ghcr.io/ivenfpeng/diary_blog:latest \
   --push .
 ```
@@ -211,6 +212,7 @@ podman login ghcr.io -u Ivenfpeng
 
 podman build \
   --platform linux/amd64 \
+  --build-arg GOPROXY=https://goproxy.cn,direct \
   -t ghcr.io/ivenfpeng/diary_blog:codex-diary-blog-mvp \
   -t ghcr.io/ivenfpeng/diary_blog:latest \
   .
@@ -230,12 +232,23 @@ MANIFEST=localhost/diary_blog:multiarch
 podman manifest rm "${MANIFEST}" 2>/dev/null || true
 podman manifest create "${MANIFEST}"
 
-podman build --platform linux/amd64 --manifest "${MANIFEST}" .
-podman build --platform linux/arm64 --manifest "${MANIFEST}" .
+podman build \
+  --platform linux/amd64 \
+  --build-arg GOPROXY=https://goproxy.cn,direct \
+  --manifest "${MANIFEST}" \
+  .
+
+podman build \
+  --platform linux/arm64 \
+  --build-arg GOPROXY=https://goproxy.cn,direct \
+  --manifest "${MANIFEST}" \
+  .
 
 podman manifest push --all "${MANIFEST}" "docker://${IMAGE}:codex-diary-blog-mvp"
 podman manifest push --all "${MANIFEST}" "docker://${IMAGE}:latest"
 ```
+
+如果 `go mod download` 报 `storage.googleapis.com` TLS timeout/EOF，通常是默认 Go module proxy 的网络问题。保留上面的 `--build-arg GOPROXY=https://goproxy.cn,direct`；如果你的网络更适合官方代理，也可以改成 `--build-arg GOPROXY=https://proxy.golang.org,direct`。
 
 如果跨架构构建失败，先确认 Podman machine / Linux 主机已启用 QEMU/binfmt。VPS 通常是 `linux/amd64`；Apple Silicon 本机通常是 `linux/arm64`，构建另一个架构时需要模拟。
 
@@ -244,6 +257,7 @@ podman manifest push --all "${MANIFEST}" "docker://${IMAGE}:latest"
 ```sh
 docker buildx build \
   --platform linux/amd64 \
+  --build-arg GOPROXY=https://goproxy.cn,direct \
   -t ghcr.io/ivenfpeng/diary_blog:latest \
   --push .
 ```
