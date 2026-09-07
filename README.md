@@ -1,5 +1,7 @@
 # diary_blog
 
+[中文说明](README.zh-CN.md)
+
 A single-binary Go blog with a Vue administration interface, SQLite content
 storage, and a Caddy reverse proxy for production deployment.
 
