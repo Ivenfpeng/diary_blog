@@ -14,7 +14,7 @@
 
 总体状态：最终整分支复审已通过；Podman 本地 HTTP-only 容器部署、image-only 部署与编辑器保存回归验证通过；HTTPS 部署模式待目标环境实测
 
-最后登记：2026-09-07 15:55 CST
+最后登记：2026-09-07 16:21 CST
 
 ## 状态定义
 
@@ -80,7 +80,7 @@
 - 生产容器化已完成，包含 Node 24 + Go 1.27 多阶段 Dockerfile、GHCR 镜像发布 workflow、源码构建 Compose、image-only 部署 Compose、非 root runtime、Compose Blog/Caddy 拓扑、Docker/Podman Compose 命令切换、默认本地/内网 HTTP-only、Caddy 自动 HTTPS、自带 PEM 证书 HTTPS、Caddy 压缩/安全头/10MiB 上传限制、`/data/site` 应用目录、`/data/backups` 备份路径和 restore-safe Makefile 目标。
 - Podman 本地部署验证已完成：`podman-compose` 1.6.0 / Podman 5.8.3，`BLOG_HTTP_PORT=18080`、`BLOG_HTTPS_PORT=18443` 启动成功，`/healthz`、`/readyz`、首页、管理后台入口和容器内备份命令通过。
 - image-only 部署验证已完成：`compose.deploy.yaml` 不包含 `build` 字段，使用 `BLOG_IMAGE=localhost/diary_blog_blog:latest` 直接启动，通过 `/healthz`、`/readyz` 与管理后台资源检查；生产镜像默认指向 `ghcr.io/ivenfpeng/diary_blog:latest`；README 已补充部署机只下载最小 Compose/Caddyfile 配置后执行 `docker compose pull && docker compose up -d` 的路径，并扩展 GHCR、HTTPS、admin 密码、运维命令与排障说明。
-- 管理后台保存体验已修复：非法 slug 会在前端提示并暂停 autosave，不再持续向 `/api/admin/posts/{id}` 发送必然失败的 PUT；不存在的分类、标签或封面媒体引用会由后端返回 `post_validation` 400，不再泄露为 500。
+- 管理后台保存体验已修复：非法 slug 会在前端提示并暂停 autosave，不再持续向 `/api/admin/posts/{id}` 发送必然失败的 PUT；slug 表单 `pattern` 已兼容浏览器 `v` flag；文章编辑器改用已存在分类下拉与标签复选框，避免手填不存在 ID 导致保存 400；不存在的分类、标签或封面媒体引用会由后端返回 `post_validation` 400，不再泄露为 500。
 - E2E 与发布门禁已完成，包含 Playwright 完整写作流、draft/archived 在首页/分类/归档/搜索/RSS/Sitemap 的公开排除验证、桌面/平板/移动响应式重叠/遮挡/裁切断言、截图产物、非容器 release gate，以及 Compose fresh-volume restore-smoke 目标。
 - 最终整分支复审修复已完成，包含有界/LRU/代际公共缓存、发布期间编辑锁、公共站点设置/RSS/SEO 消费与缓存失效、分页浏览与搜索、Linux 非 root 可读的 restore-smoke staging volume，以及 fail-fast restore-smoke 检查。
 - 工作区仍包含 `.gitignore`、`.idea/`、`.metrics/` 用户改动；从本次起 `docs/progress/` 作为总控文档持续更新。
@@ -133,6 +133,7 @@
 | 2026-09-07 11:45 CST | 新增无需源码构建的 image-only 部署路径：`compose.deploy.yaml` 仅拉取/运行 `BLOG_IMAGE`，新增 GHCR 镜像发布 workflow，README 说明生产只需 Compose/Caddyfile 配置文件；Podman 本地用预构建镜像验证通过。 |
 | 2026-09-07 11:47 CST | README 继续精简补充部署机最小下载命令：只拉取 `compose.deploy.yaml` 与所需 Caddyfile，再通过 `docker compose -f compose.deploy.yaml pull/up` 部署，无需 clone 源码或本地构建。 |
 | 2026-09-07 15:55 CST | 根据 Vultr 部署反馈完善中英文 README：补充 Compose 文件选择、raw curl 下载、`.env` 变量、HTTP/HTTPS 启动方式、GHCR 镜像 not found 处理、admin 密码不可查看只能重置、备份恢复/升级/日志/健康检查和 HTTPS 排障清单。 |
+| 2026-09-07 16:21 CST | 修复管理后台测试报错：将 slug/taxonomy HTML pattern 调整为浏览器 `v` flag 可编译形式；文章编辑器加载分类/标签列表，使用下拉与复选框替代手填 ID，避免不存在 taxonomy 引用触发保存 400；targeted Vitest 通过。 |
 
 ## 下一跟进点
 

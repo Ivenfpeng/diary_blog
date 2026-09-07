@@ -8,9 +8,13 @@ import RevisionPanel, { type PostRevision } from '../components/RevisionPanel.vu
 import { apiRequest } from '../api/client'
 import { createEditorState, type EditablePost } from '../state/editor'
 
+interface TaxonomyOption { id: number; name: string; slug: string }
+
 const route = useRoute()
 const router = useRouter()
 const revisions = ref<PostRevision[]>([])
+const categories = ref<TaxonomyOption[]>([])
+const tags = ref<TaxonomyOption[]>([])
 const loading = ref(true)
 const restoring = ref(false)
 const destructiveActionInFlight = ref(false)
@@ -64,18 +68,18 @@ function updateField(field: 'title' | 'slug' | 'summary' | 'content_md', value: 
   editor.update({ [field]: value })
 }
 
-function numericValue(value: string): number | null {
-  const number = Number(value)
-  return Number.isInteger(number) && number > 0 ? number : null
-}
-
 function updateCategory(value: string): void {
   if (destructiveActionInFlight.value) return
-  editor.update({ category_id: numericValue(value) })
+  const id = Number(value)
+  editor.update({ category_id: Number.isInteger(id) && id > 0 ? id : null })
 }
-function updateTags(value: string): void {
+
+function updateTag(id: number, checked: boolean): void {
   if (destructiveActionInFlight.value) return
-  editor.update({ tag_ids: value.split(',').map((entry) => Number(entry.trim())).filter((id) => Number.isInteger(id) && id > 0) })
+  const selected = new Set(editor.article.tag_ids)
+  if (checked) selected.add(id)
+  else selected.delete(id)
+  editor.update({ tag_ids: tags.value.filter((tag) => selected.has(tag.id)).map((tag) => tag.id) })
 }
 
 function articleSnapshot(): string {
@@ -93,12 +97,16 @@ async function load(): Promise<void> {
     return
   }
   try {
-    const [postResponse, revisionResponse] = await Promise.all([
+    const [postResponse, revisionResponse, categoryResponse, tagResponse] = await Promise.all([
       apiRequest<{ post: EditablePost }>(`/api/admin/posts/${postID.value}`),
       apiRequest<{ revisions: PostRevision[] }>(`/api/admin/posts/${postID.value}/revisions`),
+      apiRequest<{ categories: TaxonomyOption[] }>('/api/admin/categories'),
+      apiRequest<{ tags: TaxonomyOption[] }>('/api/admin/tags'),
     ])
     editor.load(postResponse.post)
     revisions.value = revisionResponse.revisions ?? []
+    categories.value = categoryResponse.categories ?? []
+    tags.value = tagResponse.tags ?? []
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to load this article.'
   } finally {
@@ -165,11 +173,18 @@ onMounted(load)
       <p v-if="editor.conflict.value" class="form-error" role="alert">This article changed elsewhere. Your local Markdown is preserved; reload before saving again.</p>
       <form class="editor-form" @submit.prevent="saveNow">
         <label>Title <input id="title" :value="editor.article.title" required :disabled="destructiveActionInFlight" @input="updateField('title', ($event.target as HTMLInputElement).value)" /></label>
-        <label>Slug <input id="slug" :value="editor.article.slug" required pattern="[a-z0-9-]+" :disabled="destructiveActionInFlight" @input="updateField('slug', ($event.target as HTMLInputElement).value)" /></label>
+        <label>Slug <input id="slug" :value="editor.article.slug" required pattern="[a-z0-9\-]+" :disabled="destructiveActionInFlight" @input="updateField('slug', ($event.target as HTMLInputElement).value)" /></label>
         <p v-if="clientValidationMessage" class="form-error wide" role="alert">{{ clientValidationMessage }}</p>
         <label class="wide">Summary <textarea id="summary" :value="editor.article.summary" rows="3" :disabled="destructiveActionInFlight" @input="updateField('summary', ($event.target as HTMLTextAreaElement).value)" /></label>
-        <label>Category ID <input id="category" :value="editor.article.category_id ?? ''" inputmode="numeric" :disabled="destructiveActionInFlight" @input="updateCategory(($event.target as HTMLInputElement).value)" /></label>
-        <label>Tag IDs <input id="tags" :value="editor.article.tag_ids.join(', ')" placeholder="1, 4, 8" :disabled="destructiveActionInFlight" @input="updateTags(($event.target as HTMLInputElement).value)" /></label>
+        <label>Category <select id="category" :value="editor.article.category_id ?? ''" :disabled="destructiveActionInFlight" @change="updateCategory(($event.target as HTMLSelectElement).value)"><option value="">No category</option><option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }} /{{ category.slug }}</option></select></label>
+        <fieldset class="tag-options">
+          <legend>Tags</legend>
+          <p v-if="tags.length === 0" class="muted">No tags yet. Create tags in Categories &amp; tags first.</p>
+          <label v-for="tag in tags" :key="tag.id" class="checkbox-label">
+            <input :id="`tag-${tag.id}`" type="checkbox" :checked="editor.article.tag_ids.includes(tag.id)" :disabled="destructiveActionInFlight" @change="updateTag(tag.id, ($event.target as HTMLInputElement).checked)" />
+            <span>{{ tag.name }} /{{ tag.slug }}</span>
+          </label>
+        </fieldset>
         <label class="wide">Markdown <MarkdownEditor :model-value="editor.article.content_md" :disabled="destructiveActionInFlight" @update:model-value="updateField('content_md', $event)" /></label>
         <div class="editor-actions"><button type="submit" class="secondary-button" :disabled="editor.saving.value || destructiveActionInFlight || !editor.dirty.value || Boolean(clientValidationMessage)"><Save :size="16" aria-hidden="true" /> Save now</button><PublishPanel :can-publish="canPublish" :saving="editor.saving.value || destructiveActionInFlight" :actions-locked="destructiveActionsLocked" :status="editor.article.status" @preview="preview" @publish="publish" @archive="archive" /></div>
       </form>
@@ -187,7 +202,11 @@ h1 { margin: 0; font-size: 28px; letter-spacing: -.025em; }
 .save-status { color: #637168; font-size: 13px; white-space: nowrap; }.save-status.saving { color: #356b54; }.save-status.conflict, .save-status.error { color: #a33a32; }
 .editor-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 label { display: grid; gap: 6px; color: #39463e; font-size: 13px; font-weight: 650; }.wide { grid-column: 1 / -1; }
-input, textarea { min-width: 0; border: 1px solid #b9c5be; border-radius: 3px; padding: 9px 10px; font: inherit; background: #fff; } textarea { resize: vertical; }
+input, select, textarea { min-width: 0; border: 1px solid #b9c5be; border-radius: 3px; padding: 9px 10px; font: inherit; background: #fff; } textarea { resize: vertical; }
+.tag-options { min-width: 0; border: 0; margin: 0; padding: 0; display: grid; gap: 8px; color: #39463e; font-size: 13px; font-weight: 650; }
+.tag-options legend { padding: 0; margin-bottom: 2px; }
+.checkbox-label { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.checkbox-label input { min-width: auto; padding: 0; }
 .editor-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border-top: 1px solid #d9dfdb; padding-top: 16px; }.secondary-button { min-height: 38px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border: 1px solid #9eaea5; border-radius: 3px; background: #fff; color: #193d2f; font: inherit; font-weight: 650; cursor: pointer; }
 .preview { border-top: 1px solid #d9dfdb; margin-top: 26px; padding-top: 20px; }.preview h2 { margin: 0 0 12px; font-size: 18px; }.muted { color: #68756d; }
 @media (max-width: 640px) { .editor-form { grid-template-columns: 1fr; }.wide, .editor-actions { grid-column: auto; }.editor-heading { align-items: flex-start; flex-direction: column; } }

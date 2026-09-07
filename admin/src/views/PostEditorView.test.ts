@@ -19,6 +19,75 @@ describe('PostEditorView', () => {
   beforeEach(() => mockedClient.apiRequest.mockReset())
   afterEach(() => vi.useRealTimers())
 
+  it('uses a browser-compatible slug pattern', async () => {
+    mockedClient.apiRequest.mockImplementation((path = '') => Promise.resolve(path.endsWith('/revisions')
+      ? { revisions: [] }
+      : {
+          post: {
+            id: 7, slug: 'valid-slug', title: 'Ready to publish', summary: '', content_md: '# Ready', status: 'draft',
+            category_id: null, tag_ids: [], revision: 3,
+          },
+        }))
+    const wrapper = mount(PostEditorView, {
+      global: {
+        stubs: {
+          RouterLink: { template: '<a><slot /></a>' },
+          MarkdownEditor: { props: ['modelValue'], template: '<textarea />' },
+          PublishPanel: true,
+          RevisionPanel: true,
+        },
+      },
+    })
+    await vi.waitFor(() => expect(wrapper.find('.editor-form').exists()).toBe(true))
+
+    const pattern = wrapper.get('#slug').attributes('pattern')
+    expect(pattern).toBeTruthy()
+    if (!pattern) throw new Error('missing slug pattern')
+    expect(() => new RegExp(pattern, 'v')).not.toThrow()
+    wrapper.unmount()
+  })
+
+  it('saves existing taxonomy selections instead of raw typed ids', async () => {
+    const post = {
+      id: 7, slug: 'valid-slug', title: 'Ready to publish', summary: '', content_md: '# Ready', status: 'draft',
+      category_id: null, tag_ids: [], revision: 3,
+    }
+    mockedClient.apiRequest.mockImplementation((path = '', options = {}) => {
+      if (path === '/api/admin/posts/7' && options.method === 'PUT') {
+        return Promise.resolve({ post: { ...post, ...options.body, revision: 4 } })
+      }
+      if (path === '/api/admin/posts/7') return Promise.resolve({ post })
+      if (path.endsWith('/revisions')) return Promise.resolve({ revisions: [] })
+      if (path === '/api/admin/categories') return Promise.resolve({ categories: [{ id: 2, name: 'Engineering', slug: 'engineering' }] })
+      if (path === '/api/admin/tags') return Promise.resolve({ tags: [{ id: 3, name: 'Go', slug: 'go' }] })
+      return Promise.resolve({})
+    })
+    const wrapper = mount(PostEditorView, {
+      global: {
+        stubs: {
+          RouterLink: { template: '<a><slot /></a>' },
+          MarkdownEditor: { props: ['modelValue'], template: '<textarea />' },
+          PublishPanel: true,
+          RevisionPanel: true,
+        },
+      },
+    })
+    await vi.waitFor(() => expect(wrapper.find('.editor-form').exists()).toBe(true))
+
+    expect(wrapper.get('#category').element.tagName).toBe('SELECT')
+    await wrapper.get('#category').setValue('2')
+    await wrapper.get('#tag-3').setValue(true)
+    await wrapper.get('form').trigger('submit')
+
+    await vi.waitFor(() => {
+      expect(mockedClient.apiRequest).toHaveBeenCalledWith('/api/admin/posts/7', expect.objectContaining({
+        method: 'PUT',
+        body: expect.objectContaining({ category_id: 2, tag_ids: [3] }),
+      }))
+    })
+    wrapper.unmount()
+  })
+
   it('keeps publish unavailable until a valid saved article is ready', async () => {
     mockedClient.apiRequest.mockResolvedValue({
       post: {
@@ -87,7 +156,7 @@ describe('PostEditorView', () => {
     expect(wrapper.get('button[name="publish"]').attributes('disabled')).toBeDefined()
     wrapper.findComponent(PublishPanelStub).vm.$emit('publish')
     await wrapper.vm.$nextTick()
-    expect(mockedClient.apiRequest).toHaveBeenCalledTimes(2)
+    expect(mockedClient.apiRequest.mock.calls.some(([path, options]) => path === '/api/admin/posts/7/publish' || options?.method === 'PUT')).toBe(false)
     wrapper.unmount()
   })
 
@@ -153,7 +222,7 @@ describe('PostEditorView', () => {
     wrapper.findComponent(RevisionPanelStub).vm.$emit('restore', { id: 11, revision: 2, title: 'Earlier', created_at: '' })
     await wrapper.vm.$nextTick()
 
-    expect(mockedClient.apiRequest).toHaveBeenCalledTimes(2)
+    expect(mockedClient.apiRequest.mock.calls.some(([path]) => path === '/api/admin/posts/7/archive' || path === '/api/admin/posts/7/revisions/11/restore')).toBe(false)
     wrapper.unmount()
   })
 
@@ -189,7 +258,7 @@ describe('PostEditorView', () => {
     wrapper.findComponent(MarkdownEditorStub).vm.$emit('update:modelValue', '# Attempted local Markdown')
     await wrapper.vm.$nextTick()
     expect(wrapper.get('#editor-heading').text()).toBe('Ready to publish')
-    expect(mockedClient.apiRequest).toHaveBeenCalledTimes(3)
+    expect(mockedClient.apiRequest.mock.calls.filter(([path]) => path === actionPath)).toHaveLength(1)
 
     pending.resolve({ post: { ...post, status: action === 'archive' ? 'archived' : 'published', revision: 4 } })
     await vi.waitFor(() => expect(wrapper.get('#title').attributes('disabled')).toBeUndefined())

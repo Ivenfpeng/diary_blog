@@ -128,7 +128,7 @@ onMounted(load)
 
       <label>
         <span>Slug</span>
-        <input v-model="slug" required pattern="[a-z0-9-]+" />
+        <input v-model="slug" required pattern="[a-z0-9\-]+" />
       </label>
 
       <button class="primary-button">Add</button>
