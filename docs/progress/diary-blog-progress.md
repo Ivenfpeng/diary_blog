@@ -10,11 +10,11 @@
 
 当前分支：`codex/diary-blog-mvp`
 
-当前阶段：最终整体验收
+当前阶段：发布收尾
 
-总体状态：待最终整分支复审
+总体状态：最终整分支复审已通过；待 Docker 宿主机实测容器门禁
 
-最后登记：2026-09-06 19:34 CST
+最后登记：2026-09-07 09:41 CST
 
 ## 状态定义
 
@@ -56,6 +56,12 @@
 | 15 | 生产构建与 Docker Compose | 完成 | `aa80ca1`, `b52e4d0`, `e3c5117` | 两轮独立审查修复后通过；`npm --prefix admin test`、`npm --prefix admin run build`、`go test ./...`、`go vet ./...`、YAML parse、Makefile dry-run 与 `git diff --check` 通过 | Docker CLI 不在当前宿主机 PATH，Compose build/up/curl 未执行；已修正 Caddy 外网 egress、`/data/site` 恢复路径、trusted proxy CIDR、localhost health 入口与 `10MiB` 上传限制 |
 | 16 | E2E、响应式与发布门禁 | 完成 | `23a07e2`, `8bac5e8`, `da090f3` | 两轮独立审查修复后通过；`npm run test:e2e`、`go test ./...`、`npm --prefix admin test`、`go vet ./...`、`git diff --check`、Makefile dry-run 通过 | 已补全 draft/archived 全公开面排除矩阵、响应式重叠/遮挡/垂直裁切断言和 fresh-volume restore-smoke 门禁；Docker CLI 不在当前宿主机 PATH，容器实际运行门禁未执行 |
 
+## 最终整体验收
+
+| 范围 | 状态 | 提交 | 验证证据 | 备注 |
+|---|---|---|---|---|
+| Task 1-16 整分支复审 | 完成 | `45e48ab`, `083a638` | 最终独立 scoped re-review 通过；`make release-gate`、`make -n container-release-gate`、`make -n restore-smoke \| sh -n`、`git diff --check` 通过 | 修复了最终 review 的 7 个 Important 与 2 个 Minor；`083a638` 仅移除误跟踪的 SDD scratch 报告 |
+
 ## 当前实现快照
 
 - Go：`go1.27.1 darwin/arm64`。
@@ -73,6 +79,7 @@
 - 备份、恢复、迁移与管理 CLI 已完成，包含 SQLite online backup、`.tar.gz` manifest/checksum、恢复前数据库/迁移验证、强制恢复 rollback、`backup`/`restore`/`migrate`/`admin reset-password`/`search rebuild` 子命令，以及备份输出 media/symlink 防护。
 - 生产容器化已完成，包含 Node 24 + Go 1.27 多阶段 Dockerfile、非 root runtime、Compose Blog/Caddy 拓扑、Caddy 压缩/安全头/10MiB 上传限制、`/data/site` 应用目录、`/data/backups` 备份路径和 restore-safe Makefile 目标。
 - E2E 与发布门禁已完成，包含 Playwright 完整写作流、draft/archived 在首页/分类/归档/搜索/RSS/Sitemap 的公开排除验证、桌面/平板/移动响应式重叠/遮挡/裁切断言、截图产物、非容器 release gate，以及 Compose fresh-volume restore-smoke 目标。
+- 最终整分支复审修复已完成，包含有界/LRU/代际公共缓存、发布期间编辑锁、公共站点设置/RSS/SEO 消费与缓存失效、分页浏览与搜索、Linux 非 root 可读的 restore-smoke staging volume，以及 fail-fast restore-smoke 检查。
 - 工作区仍包含 `.gitignore`、`.idea/`、`.metrics/` 用户改动；从本次起 `docs/progress/` 作为总控文档持续更新。
 
 ## 风险与偏差
@@ -115,9 +122,10 @@
 | 2026-09-06 08:28 CST | Task 14 经两轮审查修复通过；备份、恢复、迁移和管理 CLI 完成，进入 Task 15。 |
 | 2026-09-06 08:50 CST | Task 15 经两轮审查修复通过；生产 Dockerfile、Compose、Caddy 与部署文档完成，进入 Task 16。 |
 | 2026-09-06 19:34 CST | Task 16 经两轮审查修复通过；E2E、响应式验证、非容器 release gate 与 Compose restore-smoke 命令完成，M4 完成并进入最终整分支复审。 |
+| 2026-09-07 09:41 CST | 最终整分支复审修复波通过 scoped re-review；`make release-gate` 与静态容器门禁检查通过，Docker 实机门禁等待具备 Docker 的宿主机补跑。 |
 
 ## 下一跟进点
 
-1. 执行最终整分支复审，覆盖 Task 1-16 与所有 ledger rulings/deferred items。
-2. 在具备 Docker Desktop/Engine 的宿主机运行 `make container-release-gate`，补齐容器 build/up/health/backup/restore-smoke 实测证据。
-3. 最终复审通过后进入发布收尾，整理 release checklist 与剩余环境验证项。
+1. 在具备 Docker Desktop/Engine 的宿主机运行 `make container-release-gate BACKUP=/data/backups/release-smoke.tar.gz SMOKE_ARTICLE_PATH=/posts/<slug> SMOKE_SEARCH_QUERY=<query>`，补齐容器 build/up/health/backup/restore-smoke 实测证据。
+2. 准备发布清单与 changelog，明确 Docker 实机门禁和 Playwright bundled Chromium 下载是发布前环境项。
+3. 若要合并/推送/发版，使用应用或本地 git 流程执行；当前分支不自动推送。
