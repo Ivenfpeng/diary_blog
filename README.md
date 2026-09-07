@@ -3,21 +3,330 @@
 [中文说明](README.zh-CN.md)
 
 `diary_blog` is a single-binary technical blog: a server-rendered public site,
-a Vue admin console, SQLite storage, search, media uploads, backup/restore, and
-Compose deployment recipes.
+a Vue admin console, SQLite storage, search, media uploads, published snapshots,
+revision history, backup/restore, and Docker/Podman Compose deployment.
 
 ## Tech stack
 
 - Backend: Go 1.27, `net/http`/Chi-style routing, `html/template`, embedded
-  assets, structured `slog` logging.
-- Admin UI: Vue 3, TypeScript, Vite, Vitest, CodeMirror, Playwright E2E.
-- Storage: SQLite with WAL, embedded migrations, FTS5 trigram search,
-  published snapshots, revision history, and online backup.
-- Security: single-admin auth, Argon2id passwords, hashed sessions, CSRF
+  assets, and structured `slog` logging.
+- Admin UI: Vue 3, TypeScript, Vite, Vitest, CodeMirror, and Playwright E2E.
+- Storage: SQLite WAL, embedded migrations, FTS5 trigram search, published
+  snapshots, revision history, and online backup.
+- Security: single-admin auth, Argon2id password hashes, hashed sessions, CSRF
   double-submit checks, login throttling, and trusted reverse-proxy CIDRs.
-- Runtime: one Go binary plus Caddy as the bundled reverse proxy.
-- Containers: multi-stage Dockerfile, GHCR image publishing, Compose files
-  that work with Docker Compose or Podman Compose.
+- Runtime: one Go binary behind Caddy.
+- Containers: multi-stage Dockerfile, GHCR image publishing workflow,
+  source-build Compose, and image-only deployment Compose.
+
+## Deployment files
+
+- `compose.yaml`: builds the image from source. Use it for local development,
+  CI, and release validation.
+- `compose.deploy.yaml`: pulls and runs `BLOG_IMAGE`. Use it on servers where
+  you do not want to clone the source or build locally.
+- `compose.https-auto.yaml`: override for Caddy-managed public HTTPS.
+- `compose.https-files.yaml`: override for an existing PEM certificate/key pair.
+
+## Direct image deployment
+
+The deployment host only needs the Compose and Caddyfile configuration files.
+After the PR is merged, `GIT_REF=main` works. Before merge, set `GIT_REF` to
+the latest commit sha, tag, or an accessible branch ref; `main` will not contain
+new deployment files yet.
+
+```sh
+mkdir -p ~/diary_blog/deploy
+cd ~/diary_blog
+
+GIT_REF=main
+
+curl -fsSL \
+  -o compose.deploy.yaml \
+  "https://raw.githubusercontent.com/Ivenfpeng/diary_blog/${GIT_REF}/compose.deploy.yaml"
+
+curl -fsSL \
+  -o deploy/Caddyfile \
+  "https://raw.githubusercontent.com/Ivenfpeng/diary_blog/${GIT_REF}/deploy/Caddyfile"
+```
+
+During PR verification, prefer a commit sha so the raw URL is stable and does
+not depend on branch-name parsing or merge status.
+
+For Caddy automatic HTTPS:
+
+```sh
+curl -fsSL \
+  -o compose.https-auto.yaml \
+  "https://raw.githubusercontent.com/Ivenfpeng/diary_blog/${GIT_REF}/compose.https-auto.yaml"
+
+curl -fsSL \
+  -o deploy/Caddyfile.https-auto \
+  "https://raw.githubusercontent.com/Ivenfpeng/diary_blog/${GIT_REF}/deploy/Caddyfile.https-auto"
+```
+
+For file-based HTTPS:
+
+```sh
+curl -fsSL \
+  -o compose.https-files.yaml \
+  "https://raw.githubusercontent.com/Ivenfpeng/diary_blog/${GIT_REF}/compose.https-files.yaml"
+
+curl -fsSL \
+  -o deploy/Caddyfile.https-files \
+  "https://raw.githubusercontent.com/Ivenfpeng/diary_blog/${GIT_REF}/deploy/Caddyfile.https-files"
+```
+
+If a downloaded file contains HTML, the URL is a GitHub web page, not a raw
+file. Use `raw.githubusercontent.com`, not `github.com/.../blob/...`.
+
+## Environment
+
+HTTP-only example:
+
+```dotenv
+BLOG_IMAGE=ghcr.io/ivenfpeng/diary_blog:latest
+BLOG_PUBLIC_URL=http://blog.lan
+BLOG_SITE_ADDRESS=http://blog.lan
+BLOG_HTTP_PORT=80
+BLOG_HTTPS_PORT=443
+```
+
+Caddy automatic HTTPS example:
+
+```dotenv
+BLOG_IMAGE=ghcr.io/ivenfpeng/diary_blog:latest
+BLOG_PUBLIC_URL=https://ivenpeng.top
+BLOG_SITE_ADDRESS=ivenpeng.top
+CADDY_EMAIL=ivenfpeng@gmail.com
+BLOG_HTTP_PORT=80
+BLOG_HTTPS_PORT=443
+```
+
+Existing certificate example:
+
+```dotenv
+BLOG_IMAGE=ghcr.io/ivenfpeng/diary_blog:latest
+BLOG_PUBLIC_URL=https://blog.example.com
+BLOG_SITE_ADDRESS=blog.example.com
+TLS_CERTS_DIR=/srv/diary-blog/certs
+TLS_CERT_FILE=/certs/fullchain.pem
+TLS_KEY_FILE=/certs/privkey.pem
+BLOG_HTTP_PORT=80
+BLOG_HTTPS_PORT=443
+```
+
+Important variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `BLOG_IMAGE` | Application image to run. `latest` must already exist in GHCR. Use a version or sha tag for production. |
+| `BLOG_PUBLIC_URL` | Public site URL used for RSS, Sitemap, generated links, and cookie behavior. |
+| `BLOG_SITE_ADDRESS` | Caddy site address. Use explicit `http://...` for HTTP-only; use a hostname for automatic HTTPS. |
+| `BLOG_HTTP_PORT` | Host HTTP port, default `80`. |
+| `BLOG_HTTPS_PORT` | Host HTTPS port, default `443`. |
+| `CADDY_EMAIL` | ACME email for Caddy automatic HTTPS. |
+| `TLS_CERTS_DIR` | Host certificate directory for file-based HTTPS. |
+| `TLS_CERT_FILE` / `TLS_KEY_FILE` | Certificate and key paths inside the container. |
+
+## Start modes
+
+HTTP-only:
+
+```sh
+docker compose -f compose.deploy.yaml pull
+docker compose -f compose.deploy.yaml up -d
+```
+
+Caddy automatic HTTPS:
+
+```sh
+docker compose -f compose.deploy.yaml -f compose.https-auto.yaml pull
+docker compose -f compose.deploy.yaml -f compose.https-auto.yaml up -d
+```
+
+Existing certificate files:
+
+```sh
+docker compose -f compose.deploy.yaml -f compose.https-files.yaml pull
+docker compose -f compose.deploy.yaml -f compose.https-files.yaml up -d
+```
+
+If HTTPS terminates at Nginx, Traefik, a load balancer, or another gateway,
+keep this stack in HTTP-only mode and set `BLOG_PUBLIC_URL` to the external
+`https://...` URL.
+
+## GHCR image notes
+
+The default image is:
+
+```text
+ghcr.io/ivenfpeng/diary_blog:latest
+```
+
+If Compose reports `not found`, that tag has not been published or is private
+to the current Docker login.
+
+Publish manually:
+
+```sh
+docker login ghcr.io -u Ivenfpeng
+
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t ghcr.io/ivenfpeng/diary_blog:latest \
+  --push .
+```
+
+For one amd64 VPS:
+
+```sh
+docker buildx build \
+  --platform linux/amd64 \
+  -t ghcr.io/ivenfpeng/diary_blog:latest \
+  --push .
+```
+
+Pull from a private package:
+
+```sh
+docker login ghcr.io -u Ivenfpeng
+docker pull ghcr.io/ivenfpeng/diary_blog:latest
+```
+
+## Admin account
+
+Admin URL:
+
+```text
+https://your-domain/admin/
+```
+
+The system stores only an Argon2id hash, not the plaintext password. You cannot
+view the current password; reset it instead.
+There is no user-list or password-view command. If you are unsure whether the
+admin account exists, reset the same `--username`; it will initialize or update
+that account.
+
+Reset or initialize the administrator:
+
+```sh
+printf '%s\n' 'replace-with-a-strong-password' | \
+  docker compose -f compose.deploy.yaml exec -T blog \
+  /app/blog admin reset-password --username admin
+```
+
+For automatic HTTPS, use the same Compose file set:
+
+```sh
+printf '%s\n' 'replace-with-a-strong-password' | \
+  docker compose -f compose.deploy.yaml -f compose.https-auto.yaml exec -T blog \
+  /app/blog admin reset-password --username admin
+```
+
+## Operations
+
+Use the same `-f` file set that you used to start the stack.
+
+```sh
+docker compose -f compose.deploy.yaml ps
+docker compose -f compose.deploy.yaml logs --tail=200
+docker compose -f compose.deploy.yaml logs -f caddy
+docker compose -f compose.deploy.yaml logs -f blog
+```
+
+Health checks:
+
+```sh
+curl -i http://127.0.0.1/healthz
+curl -i http://127.0.0.1/readyz
+curl -I http://your-domain
+curl -kI https://your-domain
+```
+
+Upgrade:
+
+```sh
+docker compose -f compose.deploy.yaml pull
+docker compose -f compose.deploy.yaml up -d
+```
+
+Backup:
+
+```sh
+docker compose -f compose.deploy.yaml exec -T blog \
+  /app/blog backup --output /data/backups/backup-$(date +%F).tar.gz
+```
+
+Restore:
+
+```sh
+docker compose -f compose.deploy.yaml stop blog
+docker compose -f compose.deploy.yaml run --rm --no-deps blog \
+  restore --input /data/backups/backup-YYYY-MM-DD.tar.gz --force
+docker compose -f compose.deploy.yaml up -d blog
+```
+
+Rebuild search:
+
+```sh
+docker compose -f compose.deploy.yaml exec -T blog /app/blog search rebuild
+```
+
+Run migrations:
+
+```sh
+docker compose -f compose.deploy.yaml exec -T blog /app/blog migrate
+```
+
+`docker compose down` keeps named volumes by default. Do not run
+`docker compose down -v` unless you intentionally want to delete site data.
+
+## Data and ports
+
+- Site data lives at `/data/site` in the `blog_data` volume.
+- Backups should live under `/data/backups`.
+- Caddy stores managed HTTPS data in `caddy_data`.
+- Only Caddy publishes host ports; the Go app stays on the private Compose
+  network.
+- The default internal subnet is `172.30.0.0/24`, with Caddy at
+  `172.30.0.10`. If this conflicts with another Docker network, update both
+  the Compose subnet and `BLOG_TRUSTED_PROXY_CIDRS`.
+
+## HTTPS troubleshooting
+
+Check DNS:
+
+```sh
+curl -4 ifconfig.me
+dig +short ivenpeng.top
+```
+
+Check listening ports:
+
+```sh
+ss -lntp | grep -E ':80|:443'
+```
+
+Check that the HTTPS override is active:
+
+```sh
+docker compose -f compose.deploy.yaml -f compose.https-auto.yaml ps
+```
+
+Check Caddy certificate logs:
+
+```sh
+docker compose -f compose.deploy.yaml -f compose.https-auto.yaml logs caddy --tail=200
+```
+
+Common causes:
+
+- The domain does not point to the VPS.
+- Vultr firewall or the host firewall blocks 80/443.
+- The stack was started without `compose.https-auto.yaml`.
+- `BLOG_IMAGE` does not exist in GHCR or the server is not logged in.
+- A Markdown or GitHub `/blob/` URL was copied instead of the raw file URL.
 
 ## Local development
 
@@ -45,141 +354,3 @@ make vet
 make release-gate
 git diff --check
 ```
-
-## Direct image deployment
-
-You do not need the full source tree on a deployment host. Copy only these
-files into one directory:
-
-- `compose.deploy.yaml`
-- `compose.https-auto.yaml` or `compose.https-files.yaml`, only for HTTPS modes
-- `deploy/Caddyfile`
-- `deploy/Caddyfile.https-auto` or `deploy/Caddyfile.https-files`, only for HTTPS modes
-
-Then set the image and run Compose:
-
-```sh
-mkdir -p diary-blog/deploy
-cd diary-blog
-curl -fsSLO https://raw.githubusercontent.com/Ivenfpeng/diary_blog/main/compose.deploy.yaml
-curl -fsSLo deploy/Caddyfile https://raw.githubusercontent.com/Ivenfpeng/diary_blog/main/deploy/Caddyfile
-```
-
-```dotenv
-BLOG_IMAGE=ghcr.io/ivenfpeng/diary_blog:latest
-BLOG_PUBLIC_URL=http://blog.lan
-BLOG_SITE_ADDRESS=http://blog.lan
-BLOG_HTTP_PORT=80
-```
-
-```sh
-docker compose -f compose.deploy.yaml pull
-docker compose -f compose.deploy.yaml up -d
-```
-
-Use `ghcr.io/ivenfpeng/diary_blog:<version-or-sha>` instead of `latest` when
-you want pinned releases. The project also keeps `compose.yaml` for building
-from source locally.
-
-## Container command switch
-
-Makefile defaults to Docker:
-
-```sh
-make container-build
-make compose-up-http
-make deploy-up-http
-```
-
-Use Podman by overriding the command variables:
-
-```sh
-make container-build CONTAINER_COMPOSE=podman-compose CONTAINER_RUNTIME=podman
-BLOG_PUBLIC_URL=http://localhost:18080 BLOG_SITE_ADDRESS=http://localhost BLOG_HTTP_PORT=18080 BLOG_HTTPS_PORT=18443 \
-  make deploy-up-http CONTAINER_COMPOSE=podman-compose CONTAINER_RUNTIME=podman BLOG_IMAGE=localhost/diary_blog_blog:latest
-make compose-health COMPOSE_HEALTH_URL=http://localhost:18080
-```
-
-If host ports 80/443 are occupied or unavailable, set `BLOG_HTTP_PORT` and
-`BLOG_HTTPS_PORT` in `.env` or the shell.
-
-## Deployment modes
-
-### 1. Local or intranet HTTP-only
-
-Default mode. No public domain, email address, or TLS certificate is required.
-
-```dotenv
-BLOG_PUBLIC_URL=http://blog.lan
-BLOG_SITE_ADDRESS=http://blog.lan
-BLOG_HTTP_PORT=80
-```
-
-```sh
-docker compose -f compose.deploy.yaml up -d
-# or
-podman-compose -f compose.deploy.yaml up -d
-```
-
-Use an explicit `http://` address to keep Caddy in HTTP-only mode. For an
-intranet name such as `blog.lan`, point DNS or a hosts entry to the container
-host.
-
-### 2. Public HTTPS with Caddy automatic certificates
-
-Use this when the host is reachable from the public internet on 80/443 and
-Caddy should obtain and renew the certificate.
-
-```dotenv
-BLOG_PUBLIC_URL=https://blog.example.com
-BLOG_SITE_ADDRESS=blog.example.com
-CADDY_EMAIL=ops@example.com
-BLOG_HTTP_PORT=80
-BLOG_HTTPS_PORT=443
-```
-
-```sh
-docker compose -f compose.deploy.yaml -f compose.https-auto.yaml up -d
-```
-
-### 3. HTTPS with existing certificate files
-
-Use this for certificates from any CA, enterprise PKI, wildcard certificate, NAS
-certificate manager, or other PEM certificate/key pair.
-
-```dotenv
-BLOG_PUBLIC_URL=https://blog.example.com
-BLOG_SITE_ADDRESS=blog.example.com
-TLS_CERTS_DIR=/srv/diary-blog/certs
-TLS_CERT_FILE=/certs/fullchain.pem
-TLS_KEY_FILE=/certs/privkey.pem
-BLOG_HTTP_PORT=80
-BLOG_HTTPS_PORT=443
-```
-
-```sh
-docker compose -f compose.deploy.yaml -f compose.https-files.yaml up -d
-```
-
-The certificate SAN must match `BLOG_SITE_ADDRESS`.
-
-### 4. External HTTPS gateway
-
-If HTTPS terminates at Nginx, Traefik, a cloud load balancer, a NAS portal, or
-another gateway, keep this Compose stack in HTTP-only mode and set
-`BLOG_PUBLIC_URL` to the external `https://...` URL.
-
-## Operations
-
-```sh
-make compose-ps
-make compose-logs
-make compose-health COMPOSE_HEALTH_URL=http://localhost
-make backup
-make restore RESTORE=/data/backups/backup-YYYY-MM-DD.tar.gz
-make restore-smoke
-```
-
-The app stores site data under `/data/site` in the `blog_data` volume and
-backups under `/data/backups`. Caddy is the only published service; the Go app
-stays on the private Compose network.
