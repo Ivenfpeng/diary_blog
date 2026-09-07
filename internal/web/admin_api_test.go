@@ -237,6 +237,20 @@ func TestAdminPostAPIMapsValidationNotFoundAndConflictErrors(t *testing.T) {
 		"slug": "conflict", "title": "Stale", "content_md": "text", "tag_ids": []int64{}, "expected_revision": 99,
 	})
 	assertAPIError(t, response, http.StatusConflict, "post_conflict", "The article changed on the server.")
+
+	for _, test := range []struct {
+		name string
+		body map[string]any
+	}{
+		{name: "missing category", body: map[string]any{"slug": "conflict", "title": "Missing category", "content_md": "text", "category_id": 999, "tag_ids": []int64{}, "expected_revision": 1}},
+		{name: "missing tag", body: map[string]any{"slug": "conflict", "title": "Missing tag", "content_md": "text", "tag_ids": []int64{999}, "expected_revision": 1}},
+		{name: "missing cover media", body: map[string]any{"slug": "conflict", "title": "Missing cover", "content_md": "text", "cover_media_id": 999, "tag_ids": []int64{}, "expected_revision": 1}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response = adminRequest(t, server, session, csrf, http.MethodPut, "/api/admin/posts/"+strconv.FormatInt(id, 10), test.body)
+			assertAPIError(t, response, http.StatusBadRequest, "post_validation", "The article data is invalid.")
+		})
+	}
 }
 
 func TestAdminPostAPIRejectsMissingParentResources(t *testing.T) {

@@ -12,9 +12,9 @@
 
 当前阶段：发布收尾
 
-总体状态：最终整分支复审已通过；Podman 本地 HTTP-only 容器部署验证通过；HTTPS 部署模式待目标环境实测
+总体状态：最终整分支复审已通过；Podman 本地 HTTP-only 容器部署与编辑器保存回归验证通过；HTTPS 部署模式待目标环境实测
 
-最后登记：2026-09-07 11:04 CST
+最后登记：2026-09-07 11:29 CST
 
 ## 状态定义
 
@@ -79,6 +79,7 @@
 - 备份、恢复、迁移与管理 CLI 已完成，包含 SQLite online backup、`.tar.gz` manifest/checksum、恢复前数据库/迁移验证、强制恢复 rollback、`backup`/`restore`/`migrate`/`admin reset-password`/`search rebuild` 子命令，以及备份输出 media/symlink 防护。
 - 生产容器化已完成，包含 Node 24 + Go 1.27 多阶段 Dockerfile、非 root runtime、Compose Blog/Caddy 拓扑、Docker/Podman Compose 命令切换、默认本地/内网 HTTP-only、Caddy 自动 HTTPS、自带 PEM 证书 HTTPS、Caddy 压缩/安全头/10MiB 上传限制、`/data/site` 应用目录、`/data/backups` 备份路径和 restore-safe Makefile 目标。
 - Podman 本地部署验证已完成：`podman-compose` 1.6.0 / Podman 5.8.3，`BLOG_HTTP_PORT=18080`、`BLOG_HTTPS_PORT=18443` 启动成功，`/healthz`、`/readyz`、首页、管理后台入口和容器内备份命令通过。
+- 管理后台保存体验已修复：非法 slug 会在前端提示并暂停 autosave，不再持续向 `/api/admin/posts/{id}` 发送必然失败的 PUT；不存在的分类、标签或封面媒体引用会由后端返回 `post_validation` 400，不再泄露为 500。
 - E2E 与发布门禁已完成，包含 Playwright 完整写作流、draft/archived 在首页/分类/归档/搜索/RSS/Sitemap 的公开排除验证、桌面/平板/移动响应式重叠/遮挡/裁切断言、截图产物、非容器 release gate，以及 Compose fresh-volume restore-smoke 目标。
 - 最终整分支复审修复已完成，包含有界/LRU/代际公共缓存、发布期间编辑锁、公共站点设置/RSS/SEO 消费与缓存失效、分页浏览与搜索、Linux 非 root 可读的 restore-smoke staging volume，以及 fail-fast restore-smoke 检查。
 - 工作区仍包含 `.gitignore`、`.idea/`、`.metrics/` 用户改动；从本次起 `docs/progress/` 作为总控文档持续更新。
@@ -100,6 +101,7 @@
 | R-011 | 低 | 已裁定 | Compose 固定使用 `172.30.0.0/24` 内部网段和 Caddy `172.30.0.10/32` trusted proxy | README 说明如与宿主 Docker 网络冲突需同时调整 subnet 与 trusted proxy CIDR |
 | R-012 | 中 | 待环境验证 | 当前宿主机无法下载 Playwright bundled Chromium，E2E 默认使用已安装 Chrome channel | CI 或干净开发机需先运行 `npx playwright install chromium` 并使用 `PLAYWRIGHT_BUNDLED_CHROMIUM=1 npm run test:e2e`，或安装可用 Chrome channel |
 | R-013 | 中 | 部分验证 | Docker CLI 缺失导致 Docker 版 `container-release-gate` 与 `restore-smoke` 未实际执行 | Podman Compose 已验证 build/up/health/home/admin/backup；fresh-volume restore-smoke 仍需要先准备带媒体的发布 smoke 文章；HTTPS 自动证书和自带证书模式需在对应目标环境补跑 |
+| R-014 | 低 | 已解决 | 编辑器 autosave 会把明显非法 slug 发给后端，浏览器控制台出现重复 400；不存在分类/标签/封面媒体引用曾被映射成 500 | 已增加前端字段提示与 autosave 暂停；后端将 SQLite 约束错误映射为 `post_validation`；Podman 部署重建后验证通过 |
 
 ## 变更记录
 
@@ -126,6 +128,7 @@
 | 2026-09-07 09:41 CST | 最终整分支复审修复波通过 scoped re-review；`make release-gate` 与静态容器门禁检查通过，Docker 实机门禁等待具备 Docker 的宿主机补跑。 |
 | 2026-09-07 10:47 CST | 根据部署反馈补强 Compose 策略：默认 HTTP-only 支持本地/内网部署；新增 Caddy 自动 HTTPS 与自带 PEM 证书 HTTPS override；中英文 README 与 Makefile 入口同步更新。 |
 | 2026-09-07 11:04 CST | 使用本机 Podman 平替 Docker 完成本地部署验证：容器构建包含前端 build 与 Go 全量测试，HTTP-only Compose 启动成功，`/healthz`、`/readyz`、首页、管理后台和备份命令通过；README 精简为技术栈与部署方案。 |
+| 2026-09-07 11:29 CST | 修复管理后台保存 400/500 体验：非法 slug 前端提示并阻止 autosave；缺失分类、标签或封面媒体引用映射为 400；Podman 本地部署已重建并确认加载新前端资源。 |
 
 ## 下一跟进点
 

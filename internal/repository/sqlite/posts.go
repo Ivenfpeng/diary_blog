@@ -38,6 +38,9 @@ func (r *PostRepository) CreateDraft(ctx context.Context, input content.PostInpu
 		input.CategoryID, input.CoverMediaID, formatTime(now), formatTime(now),
 	)
 	if err != nil {
+		if isPostValidationConstraint(err) {
+			return content.Post{}, posts.ErrValidation
+		}
 		return content.Post{}, fmt.Errorf("insert draft: %w", err)
 	}
 	postID, err := result.LastInsertId()
@@ -87,6 +90,9 @@ func (r *PostRepository) SaveDraft(ctx context.Context, id int64, input content.
 		input.CoverMediaID, formatTime(now), id, expectedRevision,
 	)
 	if err != nil {
+		if isPostValidationConstraint(err) {
+			return content.Post{}, posts.ErrValidation
+		}
 		return content.Post{}, fmt.Errorf("update draft: %w", err)
 	}
 	if err := requireUpdated(result); err != nil {
@@ -706,10 +712,22 @@ func replaceTags(ctx context.Context, tx *sql.Tx, postID int64, tagIDs []int64) 
 		if _, err := tx.ExecContext(ctx,
 			"INSERT INTO post_tags (post_id, tag_id) VALUES (?, ?)", postID, tagID,
 		); err != nil {
+			if isPostValidationConstraint(err) {
+				return posts.ErrValidation
+			}
 			return fmt.Errorf("insert post tag: %w", err)
 		}
 	}
 	return nil
+}
+
+func isPostValidationConstraint(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := err.Error()
+	return strings.Contains(message, "FOREIGN KEY constraint failed") ||
+		strings.Contains(message, "UNIQUE constraint failed")
 }
 
 func replacePublishedSnapshot(ctx context.Context, tx *sql.Tx, post content.Post, rendered content.RenderedContent, now time.Time) error {

@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PostEditorView from './PostEditorView.vue'
 
 const mockedClient = vi.hoisted(() => ({ apiRequest: vi.fn() }))
@@ -17,6 +17,7 @@ function deferred<T>() {
 
 describe('PostEditorView', () => {
   beforeEach(() => mockedClient.apiRequest.mockReset())
+  afterEach(() => vi.useRealTimers())
 
   it('keeps publish unavailable until a valid saved article is ready', async () => {
     mockedClient.apiRequest.mockResolvedValue({
@@ -87,6 +88,33 @@ describe('PostEditorView', () => {
     wrapper.findComponent(PublishPanelStub).vm.$emit('publish')
     await wrapper.vm.$nextTick()
     expect(mockedClient.apiRequest).toHaveBeenCalledTimes(2)
+    wrapper.unmount()
+  })
+
+  it('pauses autosave and explains the field error while the slug is invalid', async () => {
+    const post = {
+      id: 7, slug: 'valid-slug', title: 'Ready to publish', summary: '', content_md: '# Ready', status: 'draft',
+      category_id: null, tag_ids: [], revision: 3,
+    }
+    mockedClient.apiRequest.mockImplementation((path = '') => Promise.resolve(path.endsWith('/revisions') ? { revisions: [] } : { post }))
+    const wrapper = mount(PostEditorView, {
+      global: {
+        stubs: {
+          RouterLink: { template: '<a><slot /></a>' },
+          MarkdownEditor: { props: ['modelValue'], emits: ['update:modelValue'], template: '<textarea data-testid="markdown-editor" @input="$emit(\'update:modelValue\', $event.target.value)" />' },
+          PublishPanel: { props: ['canPublish'], template: '<button name="publish" :disabled="!canPublish">Publish</button>' },
+          RevisionPanel: true,
+        },
+      },
+    })
+    await vi.waitFor(() => expect(wrapper.find('.editor-form').exists()).toBe(true))
+
+    vi.useFakeTimers()
+    await wrapper.get('#slug').setValue('中文 slug')
+    await vi.advanceTimersByTimeAsync(1600)
+
+    expect(wrapper.text()).toContain('Slug must use lowercase letters, numbers, and single hyphens.')
+    expect(mockedClient.apiRequest.mock.calls.some(([path, options]) => path === '/api/admin/posts/7' && options?.method === 'PUT')).toBe(false)
     wrapper.unmount()
   })
 

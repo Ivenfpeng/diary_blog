@@ -20,7 +20,18 @@ const publishSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const maxContentBytes = 2 * 1024 * 1024
 const textEncoder = new TextEncoder()
 
+const clientValidationMessage = computed(() => {
+  const titleBytes = textEncoder.encode(editor.article.title).length
+  const contentBytes = textEncoder.encode(editor.article.content_md).length
+  if (editor.article.slug && !publishSlugPattern.test(editor.article.slug)) return 'Slug must use lowercase letters, numbers, and single hyphens.'
+  if (/[\r\n]/.test(editor.article.title)) return 'Title must stay on one line.'
+  if (titleBytes > 300) return 'Title must be 300 bytes or fewer.'
+  if (contentBytes > maxContentBytes) return 'Markdown must be 2 MiB or smaller.'
+  return ''
+})
+
 const editor = createEditorState(async (article) => {
+  if (clientValidationMessage.value) throw new Error(clientValidationMessage.value)
   const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${article.id}`, {
     method: 'PUT',
     body: {
@@ -155,11 +166,12 @@ onMounted(load)
       <form class="editor-form" @submit.prevent="saveNow">
         <label>Title <input id="title" :value="editor.article.title" required :disabled="destructiveActionInFlight" @input="updateField('title', ($event.target as HTMLInputElement).value)" /></label>
         <label>Slug <input id="slug" :value="editor.article.slug" required pattern="[a-z0-9-]+" :disabled="destructiveActionInFlight" @input="updateField('slug', ($event.target as HTMLInputElement).value)" /></label>
+        <p v-if="clientValidationMessage" class="form-error wide" role="alert">{{ clientValidationMessage }}</p>
         <label class="wide">Summary <textarea id="summary" :value="editor.article.summary" rows="3" :disabled="destructiveActionInFlight" @input="updateField('summary', ($event.target as HTMLTextAreaElement).value)" /></label>
         <label>Category ID <input id="category" :value="editor.article.category_id ?? ''" inputmode="numeric" :disabled="destructiveActionInFlight" @input="updateCategory(($event.target as HTMLInputElement).value)" /></label>
         <label>Tag IDs <input id="tags" :value="editor.article.tag_ids.join(', ')" placeholder="1, 4, 8" :disabled="destructiveActionInFlight" @input="updateTags(($event.target as HTMLInputElement).value)" /></label>
         <label class="wide">Markdown <MarkdownEditor :model-value="editor.article.content_md" :disabled="destructiveActionInFlight" @update:model-value="updateField('content_md', $event)" /></label>
-        <div class="editor-actions"><button type="submit" class="secondary-button" :disabled="editor.saving.value || destructiveActionInFlight || !editor.dirty.value"><Save :size="16" aria-hidden="true" /> Save now</button><PublishPanel :can-publish="canPublish" :saving="editor.saving.value || destructiveActionInFlight" :actions-locked="destructiveActionsLocked" :status="editor.article.status" @preview="preview" @publish="publish" @archive="archive" /></div>
+        <div class="editor-actions"><button type="submit" class="secondary-button" :disabled="editor.saving.value || destructiveActionInFlight || !editor.dirty.value || Boolean(clientValidationMessage)"><Save :size="16" aria-hidden="true" /> Save now</button><PublishPanel :can-publish="canPublish" :saving="editor.saving.value || destructiveActionInFlight" :actions-locked="destructiveActionsLocked" :status="editor.article.status" @preview="preview" @publish="publish" @archive="archive" /></div>
       </form>
       <section v-if="editor.previewHTML.value" class="preview" aria-labelledby="preview-heading"><h2 id="preview-heading">Preview</h2><div v-html="editor.previewHTML.value" /></section>
       <RevisionPanel :revisions="revisions" :restoring="restoring" :actions-locked="destructiveActionsLocked" @restore="restore" />
