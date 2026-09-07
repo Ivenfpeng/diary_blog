@@ -9,8 +9,9 @@ RESTORE_SMOKE_STAGING_VOLUME ?= diary_blog_restore_smoke_staging
 RESTORE_SMOKE_PORT ?= 18081
 SMOKE_ARTICLE_PATH ?= /posts/release-gate-publishing-workflow
 SMOKE_SEARCH_QUERY ?= durable
+COMPOSE_HEALTH_URL ?= http://localhost
 
-.PHONY: test-go test-admin test-e2e test vet admin-build sync-admin build release-gate container-release-gate dev container-build compose-up compose-down compose-ps compose-logs compose-health backup restore restore-smoke
+.PHONY: test-go test-admin test-e2e test vet admin-build sync-admin build release-gate container-release-gate dev container-build compose-up compose-up-http compose-up-https-auto compose-up-https-files compose-down compose-ps compose-logs compose-health backup restore restore-smoke
 
 test-go:
 	GOCACHE=$(GO_CACHE) go test ./...
@@ -49,6 +50,15 @@ container-build:
 compose-up:
 	docker compose up -d
 
+compose-up-http:
+	docker compose up -d
+
+compose-up-https-auto:
+	docker compose -f compose.yaml -f compose.https-auto.yaml up -d
+
+compose-up-https-files:
+	docker compose -f compose.yaml -f compose.https-files.yaml up -d
+
 compose-down:
 	docker compose down
 
@@ -59,8 +69,8 @@ compose-logs:
 	docker compose logs -f
 
 compose-health:
-	curl --fail http://localhost/healthz
-	curl --fail http://localhost/readyz
+	curl --fail $(COMPOSE_HEALTH_URL)/healthz
+	curl --fail $(COMPOSE_HEALTH_URL)/readyz
 
 backup:
 	docker compose exec -T blog /app/blog backup --output $(BACKUP)

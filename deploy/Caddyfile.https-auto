@@ -1,3 +1,7 @@
+{
+	email {$CADDY_EMAIL}
+}
+
 (blog_proxy) {
 	encode zstd gzip
 
@@ -17,6 +21,6 @@
 	reverse_proxy blog:8080
 }
 
-{$BLOG_SITE_ADDRESS:http://localhost} {
+{$BLOG_SITE_ADDRESS} {
 	import blog_proxy
 }

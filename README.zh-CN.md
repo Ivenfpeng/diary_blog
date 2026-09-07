@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-`diary_blog` 是一个单二进制 Go 技术博客系统，包含服务端渲染公开站点、Vue 管理后台、SQLite 内容存储、全文搜索、备份恢复，以及面向生产部署的 Caddy 反向代理配置。
+`diary_blog` 是一个单二进制 Go 技术博客系统，包含服务端渲染公开站点、Vue 管理后台、SQLite 内容存储、全文搜索、备份恢复，以及支持本地 HTTP、自动 HTTPS 和自带 TLS 证书的 Compose 部署方案。
 
 ## 功能概览
 
@@ -12,7 +12,7 @@
 - 内容存储：SQLite，包含迁移、WAL、FTS5 trigram 全文搜索、发布快照和历史版本。
 - 安全能力：单管理员、Argon2id 密码、哈希会话、CSRF 双提交校验、登录限流和可信反向代理配置。
 - 运维能力：结构化日志、健康检查、就绪检查、公开页缓存、优雅停机、备份、恢复、迁移和管理员密码重置。
-- 部署能力：Docker 多阶段构建、Docker Compose、Caddy HTTPS、持久化数据卷和恢复演练命令。
+- 部署能力：Docker 多阶段构建、Docker Compose、本地/内网 HTTP-only、Caddy 自动 HTTPS、自带 TLS 证书、持久化数据卷和恢复演练命令。
 - 发布门禁：Go 测试、Vue 测试、Vite 构建、Playwright E2E、响应式布局检查和容器门禁 dry-run。
 
 ## 本地开发
@@ -96,23 +96,23 @@ make container-release-gate \
   SMOKE_SEARCH_QUERY=durable
 ```
 
-该命令会构建 Compose 镜像、启动生产拓扑、通过 Caddy 检查 `/healthz` 和 `/readyz`、创建备份、把备份恢复到全新的临时 Docker volume，再启动一次性 Blog 容器验证恢复后的文章路由、搜索结果和文章 HTML 中引用的第一个媒体资源。若默认端口、容器名或 volume 名冲突，可覆盖 `RESTORE_SMOKE_PORT`、`RESTORE_SMOKE_CONTAINER` 或 `RESTORE_SMOKE_VOLUME`。
+该命令会构建 Compose 镜像、启动默认 HTTP-only 生产拓扑、通过反向代理检查 `/healthz` 和 `/readyz`、创建备份、把备份恢复到全新的临时 Docker volume，再启动一次性 Blog 容器验证恢复后的文章路由、搜索结果和文章 HTML 中引用的第一个媒体资源。若默认端口、容器名或 volume 名冲突，可覆盖 `RESTORE_SMOKE_PORT`、`RESTORE_SMOKE_CONTAINER` 或 `RESTORE_SMOKE_VOLUME`。
 
 ## 使用 Compose 生产部署
 
-在 `compose.yaml` 旁创建 `.env` 文件，写入公开域名和 Caddy 申请证书使用的邮箱：
+内置 Compose 拓扑会让应用容器保持私有，并把 Caddy 放在前面作为反向代理。这里选择 Caddy 不是因为证书必须由 Caddy 管理，而是因为它足够轻量：既能服务纯 HTTP，也能自动申请公网证书，还能加载任意已有的 PEM 证书和私钥。
+
+### 本地或内网 HTTP-only
+
+这是默认模式，不需要公网域名、邮箱或 TLS 证书。只有当你想把公开 URL 或监听地址改成非 localhost 时，才需要在 `compose.yaml` 旁创建 `.env`：
 
 ```dotenv
-BLOG_DOMAIN=blog.example.com
-BLOG_PUBLIC_URL=https://blog.example.com
-CADDY_EMAIL=ops@example.com
+BLOG_PUBLIC_URL=http://blog.lan
+BLOG_SITE_ADDRESS=http://blog.lan
+BLOG_HTTP_PORT=80
 ```
 
-`BLOG_DOMAIN`、`BLOG_PUBLIC_URL` 和 `CADDY_EMAIL` 是生产部署必填项。不要把 `BLOG_PUBLIC_URL` 指向 Compose 内部主机名；它会用于生成 canonical 链接和 Cookie 设置。
-
-Compose 会把 Caddy 固定在私有应用网络的 `172.30.0.10`，并把 `BLOG_TRUSTED_PROXY_CIDRS=172.30.0.10/32` 传给应用，使登录限流和日志能够使用可信的 forwarded client address，同时不信任任意 peer。如果宿主机已有 Docker 网络与 `172.30.0.0/24` 冲突，需要同时调整 Compose subnet 和 trusted proxy CIDR。
-
-构建并启动生产拓扑：
+`BLOG_SITE_ADDRESS` 需要显式带上 `http://` 前缀；这会告诉 Caddy 使用 HTTP-only，而不是尝试自动 HTTPS。然后构建并启动：
 
 ```sh
 docker compose build
@@ -122,13 +122,60 @@ curl --fail http://localhost/healthz
 curl --fail http://localhost/readyz
 ```
 
-Caddy 是唯一暴露 80/443 端口的服务；应用容器只在内部 Compose 网络中可访问。Caddy 还加入了一个具备 egress 的普通网络，用于证书签发与续期。博客持久数据存储在 `blog_data` volume 的 `/data/site`，备份存储在 `/data/backups`，Caddy 证书存储在 `caddy_data`。
+如果使用 `blog.lan` 之类的内网域名，请把本地 DNS 或 hosts 记录指向 Docker 宿主机，并让 `BLOG_PUBLIC_URL` 和 `BLOG_SITE_ADDRESS` 保持一致。不要把 `BLOG_PUBLIC_URL` 指向 Compose 内部主机名；它会用于生成 canonical 链接和 Cookie 设置。如果修改了 `BLOG_HTTP_PORT`，请把端口也写进 `BLOG_PUBLIC_URL` 和健康检查地址，例如 `make compose-health COMPOSE_HEALTH_URL=http://blog.lan:8080`。
+
+### 公网 HTTPS：由 Caddy 自动申请证书
+
+当 Docker 宿主机可以从公网访问 80/443 端口，并希望 Caddy/ACME 自动申请和续期证书时，使用这个模式：
+
+```dotenv
+BLOG_PUBLIC_URL=https://blog.example.com
+BLOG_SITE_ADDRESS=blog.example.com
+CADDY_EMAIL=ops@example.com
+BLOG_HTTP_PORT=80
+BLOG_HTTPS_PORT=443
+```
+
+```sh
+docker compose -f compose.yaml -f compose.https-auto.yaml up -d
+```
+
+### HTTPS：使用已有通用证书
+
+当证书来自其他 CA、企业 PKI、NAS 证书管理器、通配符证书或任何已有 PEM 证书/私钥对时，使用这个模式。把宿主机证书目录挂载给 Caddy：
+
+```dotenv
+BLOG_PUBLIC_URL=https://blog.example.com
+BLOG_SITE_ADDRESS=blog.example.com
+TLS_CERTS_DIR=/srv/diary-blog/certs
+TLS_CERT_FILE=/certs/fullchain.pem
+TLS_KEY_FILE=/certs/privkey.pem
+BLOG_HTTP_PORT=80
+BLOG_HTTPS_PORT=443
+```
+
+```sh
+docker compose -f compose.yaml -f compose.https-files.yaml up -d
+```
+
+`TLS_CERT_FILE` 和 `TLS_KEY_FILE` 是 Caddy 容器内路径；除非同步修改 override 挂载，否则建议保持在 `/certs` 下。证书的 SAN 必须匹配 `BLOG_SITE_ADDRESS`。
+
+如果 HTTPS 已经由外部网关终止，例如 Nginx、Traefik、云负载均衡或 NAS 门户，请保留默认 HTTP-only Compose 模式，并把 `BLOG_PUBLIC_URL` 设置为外部 `https://...` 地址。在这种拓扑里，内置 Caddy 只是本地 HTTP 反向代理，不管理任何证书。
+
+### 网络、存储和常用命令
+
+Compose 会把 Caddy 固定在私有应用网络的 `172.30.0.10`，并把 `BLOG_TRUSTED_PROXY_CIDRS=172.30.0.10/32` 传给应用，使登录限流和日志能够使用可信的 forwarded client address，同时不信任任意 peer。如果宿主机已有 Docker 网络与 `172.30.0.0/24` 冲突，需要同时调整 Compose subnet 和 trusted proxy CIDR。
+
+Caddy 是唯一暴露端口的服务；应用容器只在内部 Compose 网络中可访问。HTTP-only 和 ACME HTTP challenge 会使用 80 端口，443 端口只在 HTTPS 模式使用。如果宿主机端口冲突，可覆盖 `BLOG_HTTP_PORT` 或 `BLOG_HTTPS_PORT`。博客持久数据存储在 `blog_data` volume 的 `/data/site`，备份存储在 `/data/backups`；使用 Caddy 自动 HTTPS 时，Caddy 管理的证书存储在 `caddy_data`。
 
 常用容器命令也可以使用 Makefile：
 
 ```sh
 make container-build
-make compose-up
+make compose-up-http
+make compose-up-https-auto
+make compose-up-https-files
+make compose-health COMPOSE_HEALTH_URL=http://localhost
 make compose-logs
 ```
 
@@ -171,7 +218,7 @@ make restore-smoke
 1. 创建备份，并把备份复制到 Docker 宿主机之外。
 2. 拉取新源码或新镜像，阅读发布说明；如果新增必填环境变量，同步更新 `.env`。
 3. 执行 `docker compose build`，或在使用版本化镜像时拉取对应镜像。
-4. 执行 `docker compose up -d`；启动迁移会在 Blog 报告 ready 之前完成。
+4. HTTP-only 模式执行 `docker compose up -d`；HTTPS 模式则带上对应 override 文件。启动迁移会在 Blog 报告 ready 之前完成。
 5. 检查 `docker compose ps`，再通过 Caddy 请求 `/healthz` 和 `/readyz`。
 6. 在健康检查和内容 smoke test 成功前，保留上一版镜像。只有在需要回滚数据时才恢复备份。
 

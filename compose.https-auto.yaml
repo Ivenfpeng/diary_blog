@@ -1,0 +1,7 @@
+services:
+  caddy:
+    environment:
+      BLOG_SITE_ADDRESS: "${BLOG_SITE_ADDRESS:?set BLOG_SITE_ADDRESS in .env for automatic HTTPS}"
+      CADDY_EMAIL: "${CADDY_EMAIL:?set CADDY_EMAIL in .env for automatic HTTPS}"
+    volumes:
+      - ./deploy/Caddyfile.https-auto:/etc/caddy/Caddyfile:ro

@@ -17,6 +17,7 @@
 	reverse_proxy blog:8080
 }
 
-{$BLOG_SITE_ADDRESS:http://localhost} {
+{$BLOG_SITE_ADDRESS} {
+	tls {$TLS_CERT_FILE:/certs/fullchain.pem} {$TLS_KEY_FILE:/certs/privkey.pem}
 	import blog_proxy
 }

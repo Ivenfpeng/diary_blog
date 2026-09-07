@@ -1,0 +1,9 @@
+services:
+  caddy:
+    environment:
+      BLOG_SITE_ADDRESS: "${BLOG_SITE_ADDRESS:?set BLOG_SITE_ADDRESS in .env for file-based HTTPS}"
+      TLS_CERT_FILE: "${TLS_CERT_FILE:-/certs/fullchain.pem}"
+      TLS_KEY_FILE: "${TLS_KEY_FILE:-/certs/privkey.pem}"
+    volumes:
+      - ./deploy/Caddyfile.https-files:/etc/caddy/Caddyfile:ro
+      - "${TLS_CERTS_DIR:?set TLS_CERTS_DIR to the host directory containing your certificate and key files}:/certs:ro"

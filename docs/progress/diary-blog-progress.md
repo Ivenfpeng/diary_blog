@@ -14,7 +14,7 @@
 
 总体状态：最终整分支复审已通过；待 Docker 宿主机实测容器门禁
 
-最后登记：2026-09-07 09:41 CST
+最后登记：2026-09-07 10:47 CST
 
 ## 状态定义
 
@@ -53,7 +53,7 @@
 | 12 | 分类、媒体与站点设置 | 完成 | `f857dca`, `2e37bc6`, `0f63e4b`, `d68ed8a`, `7710281`, `5ea64fb` | 四轮独立审查修复后通过；`go test ./...`、`go vet ./...`、`npm --prefix admin test`、`npm --prefix admin run build`、`git diff --check` 通过 | WebP 使用真实解码；AVIF 采用严格结构/属性/extent 校验而非像素级解码 |
 | 13 | 日志、健康检查、缓存与停机 | 完成 | `aa78da2`, `b106691` | 一轮独立审查修复后通过；Task 13 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已修正 panic 日志状态与 slug 变更后的旧文章缓存失效 |
 | 14 | 备份、恢复、迁移与管理 CLI | 完成 | `7695e9e`, `5bd3db2`, `69ec676`, `e38ca9e`, `a454f28` | 两轮独立审查修复后通过；Task 14 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已改用 SQLite online backup；恢复前校验 checksum、路径白名单、数据库 quick_check 与迁移版本；强制恢复具备 rollback；备份/恢复限制对齐 |
-| 15 | 生产构建与 Docker Compose | 完成 | `aa80ca1`, `b52e4d0`, `e3c5117` | 两轮独立审查修复后通过；`npm --prefix admin test`、`npm --prefix admin run build`、`go test ./...`、`go vet ./...`、YAML parse、Makefile dry-run 与 `git diff --check` 通过 | Docker CLI 不在当前宿主机 PATH，Compose build/up/curl 未执行；已修正 Caddy 外网 egress、`/data/site` 恢复路径、trusted proxy CIDR、localhost health 入口与 `10MiB` 上传限制 |
+| 15 | 生产构建与 Docker Compose | 完成 | `aa80ca1`, `b52e4d0`, `e3c5117` | 两轮独立审查修复后通过；`npm --prefix admin test`、`npm --prefix admin run build`、`go test ./...`、`go vet ./...`、YAML parse、Makefile dry-run 与 `git diff --check` 通过 | Docker CLI 不在当前宿主机 PATH，Compose build/up/curl 未执行；已修正 Caddy 外网 egress、`/data/site` 恢复路径、trusted proxy CIDR、localhost health 入口与 `10MiB` 上传限制；后续补强默认 HTTP-only、本地/内网部署、Caddy 自动 HTTPS 与自带证书 HTTPS 三种 Compose 入口 |
 | 16 | E2E、响应式与发布门禁 | 完成 | `23a07e2`, `8bac5e8`, `da090f3` | 两轮独立审查修复后通过；`npm run test:e2e`、`go test ./...`、`npm --prefix admin test`、`go vet ./...`、`git diff --check`、Makefile dry-run 通过 | 已补全 draft/archived 全公开面排除矩阵、响应式重叠/遮挡/垂直裁切断言和 fresh-volume restore-smoke 门禁；Docker CLI 不在当前宿主机 PATH，容器实际运行门禁未执行 |
 
 ## 最终整体验收
@@ -77,7 +77,7 @@
 - 分类、标签、媒体库与站点设置已完成，包含 CSRF 管理端点、SQLite 全局 taxonomy slug trigger、10 MiB 媒体上传边界、WebP 解码校验、AVIF 结构校验、媒体 alt text 更新和管理视图 edit/delete 对话框。
 - 运行期能力已完成，包含 JSON slog、请求 ID、访问日志 status/bytes/route pattern、panic recovery、readyz 存储检查、进程内公开页/RSS/Sitemap 缓存、发布/归档缓存失效和 10 秒优雅停机。
 - 备份、恢复、迁移与管理 CLI 已完成，包含 SQLite online backup、`.tar.gz` manifest/checksum、恢复前数据库/迁移验证、强制恢复 rollback、`backup`/`restore`/`migrate`/`admin reset-password`/`search rebuild` 子命令，以及备份输出 media/symlink 防护。
-- 生产容器化已完成，包含 Node 24 + Go 1.27 多阶段 Dockerfile、非 root runtime、Compose Blog/Caddy 拓扑、Caddy 压缩/安全头/10MiB 上传限制、`/data/site` 应用目录、`/data/backups` 备份路径和 restore-safe Makefile 目标。
+- 生产容器化已完成，包含 Node 24 + Go 1.27 多阶段 Dockerfile、非 root runtime、Compose Blog/Caddy 拓扑、默认本地/内网 HTTP-only、Caddy 自动 HTTPS、自带 PEM 证书 HTTPS、Caddy 压缩/安全头/10MiB 上传限制、`/data/site` 应用目录、`/data/backups` 备份路径和 restore-safe Makefile 目标。
 - E2E 与发布门禁已完成，包含 Playwright 完整写作流、draft/archived 在首页/分类/归档/搜索/RSS/Sitemap 的公开排除验证、桌面/平板/移动响应式重叠/遮挡/裁切断言、截图产物、非容器 release gate，以及 Compose fresh-volume restore-smoke 目标。
 - 最终整分支复审修复已完成，包含有界/LRU/代际公共缓存、发布期间编辑锁、公共站点设置/RSS/SEO 消费与缓存失效、分页浏览与搜索、Linux 非 root 可读的 restore-smoke staging volume，以及 fail-fast restore-smoke 检查。
 - 工作区仍包含 `.gitignore`、`.idea/`、`.metrics/` 用户改动；从本次起 `docs/progress/` 作为总控文档持续更新。
@@ -95,10 +95,10 @@
 | R-007 | 低 | 已裁定 | AVIF 上传校验当前验证 ISO-BMFF/AVIF 元数据、属性关联和数据 extent，不做 AV1 像素级解码 | Task 12 先采用严格结构门禁；若后续接入维护良好的 AVIF decoder，可替换为像素级验证 |
 | R-008 | 低 | 已裁定 | 备份 manifest 写在 archive 最后，无法包含自身 checksum | Manifest 校验所有 payload entry；restore 拒绝 manifest 后额外条目和 payload checksum 不匹配 |
 | R-009 | 中 | 已裁定 | 备份/恢复当前限制为 10,000 entries、单 entry 64 MiB、payload 总量 512 MiB、manifest 1 MiB | 首版用对称限制避免生成不可恢复备份；大站点后续需同步提高常量与测试 |
-| R-010 | 中 | 待环境验证 | 当前宿主机没有 `docker` 可执行文件 | Task 15 已完成非 Docker 验证；`docker compose build/up/ps` 与 Caddy-routed curl 留到具备 Docker Desktop/Engine 的环境执行 |
+| R-010 | 中 | 待环境验证 | 当前宿主机没有 `docker` 可执行文件 | Task 15 已完成非 Docker 验证；默认 HTTP-only、Caddy 自动 HTTPS、自带证书 HTTPS 的 Compose build/up/ps 与代理健康检查留到具备 Docker Desktop/Engine 的环境执行 |
 | R-011 | 低 | 已裁定 | Compose 固定使用 `172.30.0.0/24` 内部网段和 Caddy `172.30.0.10/32` trusted proxy | README 说明如与宿主 Docker 网络冲突需同时调整 subnet 与 trusted proxy CIDR |
 | R-012 | 中 | 待环境验证 | 当前宿主机无法下载 Playwright bundled Chromium，E2E 默认使用已安装 Chrome channel | CI 或干净开发机需先运行 `npx playwright install chromium` 并使用 `PLAYWRIGHT_BUNDLED_CHROMIUM=1 npm run test:e2e`，或安装可用 Chrome channel |
-| R-013 | 中 | 待环境验证 | Docker CLI 缺失导致 `container-release-gate` 与 `restore-smoke` 未实际执行 | 已增加可重复 Makefile 目标并完成 dry-run；需在具备 Docker 的宿主机执行 `make container-release-gate BACKUP=/data/backups/release-smoke.tar.gz SMOKE_ARTICLE_PATH=/posts/<slug> SMOKE_SEARCH_QUERY=<query>` |
+| R-013 | 中 | 待环境验证 | Docker CLI 缺失导致 `container-release-gate` 与 `restore-smoke` 未实际执行 | 已增加可重复 Makefile 目标并完成 dry-run；默认容器门禁走 HTTP-only，无需公网证书；需在具备 Docker 的宿主机执行 `make container-release-gate BACKUP=/data/backups/release-smoke.tar.gz SMOKE_ARTICLE_PATH=/posts/<slug> SMOKE_SEARCH_QUERY=<query>`，并按部署模式补跑 `make compose-up-https-auto` 或 `make compose-up-https-files` |
 
 ## 变更记录
 
@@ -123,9 +123,11 @@
 | 2026-09-06 08:50 CST | Task 15 经两轮审查修复通过；生产 Dockerfile、Compose、Caddy 与部署文档完成，进入 Task 16。 |
 | 2026-09-06 19:34 CST | Task 16 经两轮审查修复通过；E2E、响应式验证、非容器 release gate 与 Compose restore-smoke 命令完成，M4 完成并进入最终整分支复审。 |
 | 2026-09-07 09:41 CST | 最终整分支复审修复波通过 scoped re-review；`make release-gate` 与静态容器门禁检查通过，Docker 实机门禁等待具备 Docker 的宿主机补跑。 |
+| 2026-09-07 10:47 CST | 根据部署反馈补强 Compose 策略：默认 HTTP-only 支持本地/内网部署；新增 Caddy 自动 HTTPS 与自带 PEM 证书 HTTPS override；中英文 README 与 Makefile 入口同步更新。 |
 
 ## 下一跟进点
 
-1. 在具备 Docker Desktop/Engine 的宿主机运行 `make container-release-gate BACKUP=/data/backups/release-smoke.tar.gz SMOKE_ARTICLE_PATH=/posts/<slug> SMOKE_SEARCH_QUERY=<query>`，补齐容器 build/up/health/backup/restore-smoke 实测证据。
-2. 准备发布清单与 changelog，明确 Docker 实机门禁和 Playwright bundled Chromium 下载是发布前环境项。
-3. 若要合并/推送/发版，使用应用或本地 git 流程执行；当前分支不自动推送。
+1. 在具备 Docker Desktop/Engine 的宿主机运行 `make container-release-gate BACKUP=/data/backups/release-smoke.tar.gz SMOKE_ARTICLE_PATH=/posts/<slug> SMOKE_SEARCH_QUERY=<query>`，补齐默认 HTTP-only 容器 build/up/health/backup/restore-smoke 实测证据。
+2. 如目标环境使用公网 HTTPS 或已有证书，分别补跑 `make compose-up-https-auto` 或 `make compose-up-https-files`，并用对应 `COMPOSE_HEALTH_URL` 检查 `/healthz` 与 `/readyz`。
+3. 准备发布清单与 changelog，明确 Docker 实机门禁和 Playwright bundled Chromium 下载是发布前环境项。
+4. 若要合并/推送/发版，使用应用或本地 git 流程执行；当前分支不自动推送。
