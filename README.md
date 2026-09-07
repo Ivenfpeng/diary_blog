@@ -178,6 +178,43 @@ docker buildx build \
   --push .
 ```
 
+Publish a single-architecture image with Podman:
+
+```sh
+podman login ghcr.io -u Ivenfpeng
+
+podman build \
+  --platform linux/amd64 \
+  -t ghcr.io/ivenfpeng/diary_blog:codex-diary-blog-mvp \
+  -t ghcr.io/ivenfpeng/diary_blog:latest \
+  .
+
+podman push ghcr.io/ivenfpeng/diary_blog:codex-diary-blog-mvp
+podman push ghcr.io/ivenfpeng/diary_blog:latest
+```
+
+Publish an amd64 + arm64 multi-architecture image with Podman:
+
+```sh
+podman login ghcr.io -u Ivenfpeng
+
+IMAGE=ghcr.io/ivenfpeng/diary_blog
+MANIFEST=localhost/diary_blog:multiarch
+
+podman manifest rm "${MANIFEST}" 2>/dev/null || true
+podman manifest create "${MANIFEST}"
+
+podman build --platform linux/amd64 --manifest "${MANIFEST}" .
+podman build --platform linux/arm64 --manifest "${MANIFEST}" .
+
+podman manifest push --all "${MANIFEST}" "docker://${IMAGE}:codex-diary-blog-mvp"
+podman manifest push --all "${MANIFEST}" "docker://${IMAGE}:latest"
+```
+
+If a cross-architecture build fails, verify that the Podman machine or Linux
+host has QEMU/binfmt enabled. A VPS is usually `linux/amd64`; Apple Silicon is
+usually `linux/arm64`, so building the other architecture requires emulation.
+
 For one amd64 VPS:
 
 ```sh

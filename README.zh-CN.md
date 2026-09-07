@@ -204,6 +204,41 @@ docker buildx build \
   --push .
 ```
 
+使用 Podman 发布单架构镜像：
+
+```sh
+podman login ghcr.io -u Ivenfpeng
+
+podman build \
+  --platform linux/amd64 \
+  -t ghcr.io/ivenfpeng/diary_blog:codex-diary-blog-mvp \
+  -t ghcr.io/ivenfpeng/diary_blog:latest \
+  .
+
+podman push ghcr.io/ivenfpeng/diary_blog:codex-diary-blog-mvp
+podman push ghcr.io/ivenfpeng/diary_blog:latest
+```
+
+使用 Podman 发布 amd64 + arm64 多架构镜像：
+
+```sh
+podman login ghcr.io -u Ivenfpeng
+
+IMAGE=ghcr.io/ivenfpeng/diary_blog
+MANIFEST=localhost/diary_blog:multiarch
+
+podman manifest rm "${MANIFEST}" 2>/dev/null || true
+podman manifest create "${MANIFEST}"
+
+podman build --platform linux/amd64 --manifest "${MANIFEST}" .
+podman build --platform linux/arm64 --manifest "${MANIFEST}" .
+
+podman manifest push --all "${MANIFEST}" "docker://${IMAGE}:codex-diary-blog-mvp"
+podman manifest push --all "${MANIFEST}" "docker://${IMAGE}:latest"
+```
+
+如果跨架构构建失败，先确认 Podman machine / Linux 主机已启用 QEMU/binfmt。VPS 通常是 `linux/amd64`；Apple Silicon 本机通常是 `linux/arm64`，构建另一个架构时需要模拟。
+
 只给单台 amd64 VPS 发布也可以：
 
 ```sh
