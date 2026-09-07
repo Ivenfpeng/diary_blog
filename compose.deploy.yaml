@@ -1,0 +1,52 @@
+services:
+  blog:
+    image: "${BLOG_IMAGE:-ghcr.io/ivenfpeng/diary_blog:latest}"
+    environment:
+      BLOG_ADDR: ":8080"
+      BLOG_DATA_DIR: "/data/site"
+      BLOG_PUBLIC_URL: "${BLOG_PUBLIC_URL:-http://localhost}"
+      BLOG_TRUSTED_PROXY_CIDRS: "172.30.0.10/32"
+    volumes:
+      - blog_data:/data
+    networks:
+      app: {}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      blog:
+        condition: service_healthy
+    environment:
+      BLOG_SITE_ADDRESS: "${BLOG_SITE_ADDRESS:-http://localhost}"
+    ports:
+      - "${BLOG_HTTP_PORT:-80}:80"
+      - "${BLOG_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      app:
+        ipv4_address: 172.30.0.10
+      edge:
+    restart: unless-stopped
+
+networks:
+  app:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+  edge:
+
+volumes:
+  blog_data:
+  caddy_data:
+  caddy_config:

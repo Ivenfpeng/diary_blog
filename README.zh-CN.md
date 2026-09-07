@@ -11,7 +11,39 @@
 - 存储：SQLite WAL、嵌入式迁移、FTS5 trigram 全文搜索、发布快照、历史版本、online backup。
 - 安全：单管理员、Argon2id 密码、哈希会话、CSRF 双提交校验、登录限流、可信反向代理 CIDR。
 - 运行时：一个 Go 二进制，加内置 Caddy 反向代理。
-- 容器：多阶段 Dockerfile；Compose 文件可配合 Docker Compose 或 Podman Compose 使用。
+- 容器：多阶段 Dockerfile、GHCR 镜像发布；Compose 文件可配合 Docker Compose 或 Podman Compose 使用。
+
+## 直接镜像部署
+
+部署机器不需要完整源码树。只把这些文件放到同一个目录：
+
+- `compose.deploy.yaml`
+- `compose.https-auto.yaml` 或 `compose.https-files.yaml`，仅 HTTPS 模式需要
+- `deploy/Caddyfile`
+- `deploy/Caddyfile.https-auto` 或 `deploy/Caddyfile.https-files`，仅 HTTPS 模式需要
+
+设置镜像后直接启动：
+
+```sh
+mkdir -p diary-blog/deploy
+cd diary-blog
+curl -fsSLO https://raw.githubusercontent.com/Ivenfpeng/diary_blog/main/compose.deploy.yaml
+curl -fsSLo deploy/Caddyfile https://raw.githubusercontent.com/Ivenfpeng/diary_blog/main/deploy/Caddyfile
+```
+
+```dotenv
+BLOG_IMAGE=ghcr.io/ivenfpeng/diary_blog:latest
+BLOG_PUBLIC_URL=http://blog.lan
+BLOG_SITE_ADDRESS=http://blog.lan
+BLOG_HTTP_PORT=80
+```
+
+```sh
+docker compose -f compose.deploy.yaml pull
+docker compose -f compose.deploy.yaml up -d
+```
+
+如果要固定版本，使用 `ghcr.io/ivenfpeng/diary_blog:<version-or-sha>`，不要用 `latest`。仓库内的 `compose.yaml` 仍保留给本地源码构建使用。
 
 ## 本地开发
 
@@ -48,6 +80,7 @@ Makefile 默认使用 Docker：
 ```sh
 make container-build
 make compose-up-http
+make deploy-up-http
 ```
 
 本机使用 Podman 时覆盖变量即可：
@@ -55,7 +88,7 @@ make compose-up-http
 ```sh
 make container-build CONTAINER_COMPOSE=podman-compose CONTAINER_RUNTIME=podman
 BLOG_PUBLIC_URL=http://localhost:18080 BLOG_SITE_ADDRESS=http://localhost BLOG_HTTP_PORT=18080 BLOG_HTTPS_PORT=18443 \
-  make compose-up-http CONTAINER_COMPOSE=podman-compose CONTAINER_RUNTIME=podman
+  make deploy-up-http CONTAINER_COMPOSE=podman-compose CONTAINER_RUNTIME=podman BLOG_IMAGE=localhost/diary_blog_blog:latest
 make compose-health COMPOSE_HEALTH_URL=http://localhost:18080
 ```
 
@@ -74,9 +107,9 @@ BLOG_HTTP_PORT=80
 ```
 
 ```sh
-docker compose up -d
+docker compose -f compose.deploy.yaml up -d
 # 或
-podman-compose up -d
+podman-compose -f compose.deploy.yaml up -d
 ```
 
 `BLOG_SITE_ADDRESS` 显式使用 `http://`，Caddy 就会保持 HTTP-only。若使用 `blog.lan` 这类内网域名，把 DNS 或 hosts 记录指向容器宿主机即可。
@@ -94,7 +127,7 @@ BLOG_HTTPS_PORT=443
 ```
 
 ```sh
-docker compose -f compose.yaml -f compose.https-auto.yaml up -d
+docker compose -f compose.deploy.yaml -f compose.https-auto.yaml up -d
 ```
 
 ### 3. HTTPS：使用已有证书文件
@@ -112,7 +145,7 @@ BLOG_HTTPS_PORT=443
 ```
 
 ```sh
-docker compose -f compose.yaml -f compose.https-files.yaml up -d
+docker compose -f compose.deploy.yaml -f compose.https-files.yaml up -d
 ```
 
 证书 SAN 必须匹配 `BLOG_SITE_ADDRESS`。

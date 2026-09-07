@@ -16,8 +16,8 @@ Compose deployment recipes.
 - Security: single-admin auth, Argon2id passwords, hashed sessions, CSRF
   double-submit checks, login throttling, and trusted reverse-proxy CIDRs.
 - Runtime: one Go binary plus Caddy as the bundled reverse proxy.
-- Containers: multi-stage Dockerfile, Compose files that work with Docker
-  Compose or Podman Compose.
+- Containers: multi-stage Dockerfile, GHCR image publishing, Compose files
+  that work with Docker Compose or Podman Compose.
 
 ## Local development
 
@@ -46,6 +46,41 @@ make release-gate
 git diff --check
 ```
 
+## Direct image deployment
+
+You do not need the full source tree on a deployment host. Copy only these
+files into one directory:
+
+- `compose.deploy.yaml`
+- `compose.https-auto.yaml` or `compose.https-files.yaml`, only for HTTPS modes
+- `deploy/Caddyfile`
+- `deploy/Caddyfile.https-auto` or `deploy/Caddyfile.https-files`, only for HTTPS modes
+
+Then set the image and run Compose:
+
+```sh
+mkdir -p diary-blog/deploy
+cd diary-blog
+curl -fsSLO https://raw.githubusercontent.com/Ivenfpeng/diary_blog/main/compose.deploy.yaml
+curl -fsSLo deploy/Caddyfile https://raw.githubusercontent.com/Ivenfpeng/diary_blog/main/deploy/Caddyfile
+```
+
+```dotenv
+BLOG_IMAGE=ghcr.io/ivenfpeng/diary_blog:latest
+BLOG_PUBLIC_URL=http://blog.lan
+BLOG_SITE_ADDRESS=http://blog.lan
+BLOG_HTTP_PORT=80
+```
+
+```sh
+docker compose -f compose.deploy.yaml pull
+docker compose -f compose.deploy.yaml up -d
+```
+
+Use `ghcr.io/ivenfpeng/diary_blog:<version-or-sha>` instead of `latest` when
+you want pinned releases. The project also keeps `compose.yaml` for building
+from source locally.
+
 ## Container command switch
 
 Makefile defaults to Docker:
@@ -53,6 +88,7 @@ Makefile defaults to Docker:
 ```sh
 make container-build
 make compose-up-http
+make deploy-up-http
 ```
 
 Use Podman by overriding the command variables:
@@ -60,7 +96,7 @@ Use Podman by overriding the command variables:
 ```sh
 make container-build CONTAINER_COMPOSE=podman-compose CONTAINER_RUNTIME=podman
 BLOG_PUBLIC_URL=http://localhost:18080 BLOG_SITE_ADDRESS=http://localhost BLOG_HTTP_PORT=18080 BLOG_HTTPS_PORT=18443 \
-  make compose-up-http CONTAINER_COMPOSE=podman-compose CONTAINER_RUNTIME=podman
+  make deploy-up-http CONTAINER_COMPOSE=podman-compose CONTAINER_RUNTIME=podman BLOG_IMAGE=localhost/diary_blog_blog:latest
 make compose-health COMPOSE_HEALTH_URL=http://localhost:18080
 ```
 
@@ -80,9 +116,9 @@ BLOG_HTTP_PORT=80
 ```
 
 ```sh
-docker compose up -d
+docker compose -f compose.deploy.yaml up -d
 # or
-podman-compose up -d
+podman-compose -f compose.deploy.yaml up -d
 ```
 
 Use an explicit `http://` address to keep Caddy in HTTP-only mode. For an
@@ -103,7 +139,7 @@ BLOG_HTTPS_PORT=443
 ```
 
 ```sh
-docker compose -f compose.yaml -f compose.https-auto.yaml up -d
+docker compose -f compose.deploy.yaml -f compose.https-auto.yaml up -d
 ```
 
 ### 3. HTTPS with existing certificate files
@@ -122,7 +158,7 @@ BLOG_HTTPS_PORT=443
 ```
 
 ```sh
-docker compose -f compose.yaml -f compose.https-files.yaml up -d
+docker compose -f compose.deploy.yaml -f compose.https-files.yaml up -d
 ```
 
 The certificate SAN must match `BLOG_SITE_ADDRESS`.
