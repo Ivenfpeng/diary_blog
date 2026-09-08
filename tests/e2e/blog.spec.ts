@@ -23,9 +23,12 @@ async function fillMarkdown(page: Page, editor: Locator, markdown: string): Prom
 }
 
 async function clickMarkdownBlankArea(page: Page, editor: Locator): Promise<void> {
+  await editor.scrollIntoViewIfNeeded()
   const box = await editor.boundingBox()
   if (!box) throw new Error('Markdown editor is not visible')
-  await page.mouse.click(box.x + 24, box.y + Math.min(160, box.height - 24))
+  const viewport = page.viewportSize()
+  const y = viewport ? Math.min(box.y + Math.min(120, box.height - 24), viewport.height - 24) : box.y + 24
+  await page.mouse.click(box.x + 24, y)
 }
 
 async function expectListingDoesNotExpose(page: Page, path: string, title: string, slug: string): Promise<void> {
@@ -55,10 +58,16 @@ test('administrator can type Markdown after clicking the blank editor area', asy
   await page.locator('#title').fill('Blank area Markdown input')
   await page.locator('#slug').fill('blank-area-markdown-input')
 
-  await clickMarkdownBlankArea(page, page.locator('[data-testid="markdown-editor"]'))
+  await clickMarkdownBlankArea(page, page.locator('.rich-editor-surface'))
   await page.keyboard.insertText('# Typed from blank area\n\nThe editor should accept input here.')
+  await page.locator('#rich-editor-image-upload').setInputFiles({
+    name: 'inline-editor.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL2VwAAAABJRU5ErkJggg==', 'base64'),
+  })
 
-  await expect(page.locator('.cm-content')).toContainText('Typed from blank area')
+  await expect(page.locator('.rich-editor-surface')).toContainText('Typed from blank area')
+  await expect(page.locator('.rich-editor-surface img[alt="inline editor"]')).toBeVisible()
   await page.getByRole('button', { name: 'Save now' }).click()
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()
 })
@@ -95,7 +104,7 @@ test('administrator can publish, revise, restore, and remove a complete article 
   await page.locator('#slug').fill(articleSlug)
   await page.locator('#summary').fill('A browser-verified release workflow.')
   await page.locator('#category').selectOption(categoryID)
-  await fillMarkdown(page, page.locator('.cm-content'), `${articleMarkdown}\n![Release-gate image](${uploadedImage})\n`)
+  await fillMarkdown(page, page.locator('.rich-editor-surface'), `${articleMarkdown}\n![Release-gate image](${uploadedImage})\n`)
   await page.getByRole('button', { name: 'Save now' }).click()
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()
 
@@ -120,7 +129,7 @@ test('administrator can publish, revise, restore, and remove a complete article 
   await page.locator('.admin-content .post-row').filter({ hasText: articleTitle }).click()
   const revisedTitle = 'Release gate publishing workflow, revised'
   await page.locator('#title').fill(revisedTitle)
-  await fillMarkdown(page, page.locator('.cm-content'), `${articleMarkdown}\n\nThis revision is public.\n`)
+  await fillMarkdown(page, page.locator('.rich-editor-surface'), `${articleMarkdown}\n\nThis revision is public.\n`)
   await page.getByRole('button', { name: 'Save now' }).click()
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Publish' }).click()
@@ -141,7 +150,7 @@ test('administrator can publish, revise, restore, and remove a complete article 
   await page.locator('#title').fill(draftTitle)
   await page.locator('#slug').fill(draftSlug)
   await page.locator('#category').selectOption(categoryID)
-  await fillMarkdown(page, page.locator('.cm-content'), '# Private release draft\nThis must remain private.')
+  await fillMarkdown(page, page.locator('.rich-editor-surface'), '# Private release draft\nThis must remain private.')
   await page.getByRole('button', { name: 'Save now' }).click()
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()
 

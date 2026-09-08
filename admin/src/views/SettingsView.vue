@@ -52,10 +52,10 @@ onMounted(load)
   </section>
 </template>
 <style scoped>
-.settings-view { max-width: 680px; }
-h1 { margin: 0 0 20px; font-size: 28px; }
-form { display: grid; gap: 16px; }
+.settings-view { width: min(100%, 980px); display: grid; gap: 18px; }
+h1 { margin: 0; font-size: clamp(30px, 3vw, 44px); letter-spacing: -.045em; }
+form { display: grid; gap: 16px; padding: clamp(18px, 2.2vw, 28px); border: 1px solid rgb(202 215 205 / 80%); border-radius: 26px; background: var(--admin-panel); box-shadow: var(--admin-shadow); backdrop-filter: blur(18px); }
 label { display: grid; gap: 6px; font-size: 13px; font-weight: 650; }
-input, textarea { border: 1px solid #b9c5be; border-radius: 3px; padding: 9px 10px; font: inherit; }
+input, textarea { border: 1px solid #b9c5be; border-radius: 13px; padding: 11px 12px; font: inherit; background: #fff; }
 .muted { color: #68756d; }
 </style>

@@ -8,10 +8,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@codemirror/lang-markdown": "latest",
-    "@codemirror/state": "latest",
-    "@codemirror/view": "latest",
-    "codemirror": "latest",
     "@lucide/vue": "1.40.0",
     "vue": "latest",
     "vue-router": "latest"

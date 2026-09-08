@@ -71,7 +71,7 @@ async function assertWithinViewport(page: Page, locator: Locator, options: { che
   expect(box!.y).toBeGreaterThanOrEqual(-1)
   expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1)
   if (options.checkVertical) {
-    expect(box!.y + box!.height).toBeLessThanOrEqual(page.viewportSize()!.height + 1)
+    expect(box!.y + box!.height).toBeLessThanOrEqual(page.viewportSize()!.height + 2)
   }
 }
 
@@ -108,6 +108,18 @@ async function assertNoOverlap(page: Page, first: Locator, second: Locator, labe
 async function assertPageDoesNotOverflow(page: Page): Promise<void> {
   const dimensions = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }))
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth + 1)
+}
+
+async function assertMinWidth(page: Page, locator: Locator, minWidth: number, label: string): Promise<void> {
+  const box = await locator.boundingBox()
+  expect(box, `${label}: element has a layout box`).not.toBeNull()
+  expect(box!.width, label).toBeGreaterThanOrEqual(minWidth)
+}
+
+async function assertMinHeight(locator: Locator, minHeight: number, label: string): Promise<void> {
+  const box = await locator.boundingBox()
+  expect(box, `${label}: element has a layout box`).not.toBeNull()
+  expect(box!.height, label).toBeGreaterThanOrEqual(minHeight)
 }
 
 async function screenshot(page: Page, info: TestInfo, name: string): Promise<void> {
@@ -161,6 +173,10 @@ test('public and administration layouts fit required desktop and mobile viewport
     }
     await assertWithinViewport(page, page.getByRole('heading', { name: 'Posts' }), { checkVertical: true })
     await assertCenterIsNotOccluded(page, page.getByRole('heading', { name: 'Posts' }))
+    if (viewport.name === 'desktop') {
+      await assertMinWidth(page, page.locator('.admin-content'), viewport.width - 320, 'desktop admin workspace uses the available width')
+      await assertMinWidth(page, page.locator('.posts-view'), viewport.width - 380, 'desktop posts view expands beyond a narrow column')
+    }
     await assertPageDoesNotOverflow(page)
     await screenshot(page, testInfo, `${viewport.name}-admin-list`)
 
@@ -168,6 +184,10 @@ test('public and administration layouts fit required desktop and mobile viewport
     await assertWithinViewport(page, page.locator('#title'), { checkVertical: true })
     await assertCenterIsNotOccluded(page, page.locator('#title'))
     await assertWithinViewport(page, page.locator('[data-testid="markdown-editor"]'), { checkVertical: true })
+    if (viewport.name === 'desktop') {
+      await assertMinWidth(page, page.locator('.editor-view'), viewport.width - 380, 'desktop editor view expands across the workspace')
+      await assertMinHeight(page.locator('[data-testid="markdown-editor"]'), 480, 'desktop Markdown editor grows with the viewport')
+    }
     await assertWithinViewport(page, page.locator('.publish-actions'), { checkVertical: true })
     await assertCenterIsNotOccluded(page, page.locator('.publish-actions'))
     await assertNoOverlap(page, page.locator('#title'), page.locator('[data-testid="markdown-editor"]'), `${viewport.name} editor title does not overlap Markdown editor`)

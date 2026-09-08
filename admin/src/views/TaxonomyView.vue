@@ -242,9 +242,16 @@ onMounted(load)
 </template>
 
 <style scoped>
+.taxonomy-view {
+  width: 100%;
+  display: grid;
+  gap: 18px;
+}
+
 h1 {
-  margin: 0 0 20px;
-  font-size: 28px;
+  margin: 0;
+  font-size: clamp(30px, 3vw, 44px);
+  letter-spacing: -.045em;
 }
 
 .taxonomy-form {
@@ -252,8 +259,12 @@ h1 {
   gap: 12px;
   align-items: end;
   flex-wrap: wrap;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #d9dfdb;
+  padding: 18px;
+  border: 1px solid rgb(202 215 205 / 80%);
+  border-radius: 22px;
+  background: var(--admin-panel);
+  box-shadow: var(--admin-shadow);
+  backdrop-filter: blur(18px);
 }
 
 label {
@@ -265,21 +276,22 @@ label {
 
 input,
 select {
-  min-height: 40px;
-  padding: 0 10px;
+  min-height: 44px;
+  padding: 0 12px;
   border: 1px solid #b9c5be;
-  border-radius: 3px;
+  border-radius: 12px;
   font: inherit;
+  background: #fff;
 }
 
 .lists {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 32px;
-  padding-top: 18px;
+  gap: 18px;
 }
 
 h2 {
+  margin: 0 0 10px;
   font-size: 17px;
 }
 
@@ -292,8 +304,17 @@ small {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 8px 0;
+  padding: 12px 0;
   border-top: 1px solid #edf0ee;
+}
+
+.taxonomy-list {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid rgb(202 215 205 / 80%);
+  border-radius: 24px;
+  background: var(--admin-panel-strong);
+  box-shadow: var(--admin-shadow);
 }
 
 .row-actions,
@@ -321,9 +342,9 @@ small {
   z-index: 2;
   display: grid;
   gap: 12px;
-  padding: 20px;
+  padding: 24px;
   border: 1px solid #9eaea5;
-  border-radius: 4px;
+  border-radius: 22px;
   background: #fff;
   box-shadow: 0 12px 40px #193d2f33;
 }
@@ -335,8 +356,8 @@ small {
 .secondary-button,
 .danger-button {
   min-height: 36px;
-  padding: 0 10px;
-  border-radius: 3px;
+  padding: 0 12px;
+  border-radius: 12px;
   font: inherit;
   font-weight: 650;
   cursor: pointer;

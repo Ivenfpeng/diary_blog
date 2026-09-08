@@ -10,7 +10,8 @@ revision history, backup/restore, and Docker/Podman Compose deployment.
 
 - Backend: Go 1.27, `net/http`/Chi-style routing, `html/template`, embedded
   assets, and structured `slog` logging.
-- Admin UI: Vue 3, TypeScript, Vite, Vitest, CodeMirror, and Playwright E2E.
+- Admin UI: Vue 3, TypeScript, Vite, Vitest, a built-in rich text editor, and
+  Playwright E2E.
 - Storage: SQLite WAL, embedded migrations, FTS5 trigram search, published
   snapshots, revision history, and online backup.
 - Security: single-admin auth, Argon2id password hashes, hashed sessions, CSRF

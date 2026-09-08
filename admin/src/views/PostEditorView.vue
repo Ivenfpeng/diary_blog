@@ -9,6 +9,7 @@ import { apiRequest } from '../api/client'
 import { createEditorState, type EditablePost } from '../state/editor'
 
 interface TaxonomyOption { id: number; name: string; slug: string }
+interface UploadedMedia { path: string; alt_text: string }
 
 const route = useRoute()
 const router = useRouter()
@@ -80,6 +81,18 @@ function updateTag(id: number, checked: boolean): void {
   if (checked) selected.add(id)
   else selected.delete(id)
   editor.update({ tag_ids: tags.value.filter((tag) => selected.has(tag.id)).map((tag) => tag.id) })
+}
+
+function imageAltFromFilename(file: File): string {
+  return file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim() || 'Uploaded image'
+}
+
+async function uploadEditorImage(file: File): Promise<{ src: string; alt: string }> {
+  const body = new FormData()
+  body.set('file', file)
+  body.set('alt_text', imageAltFromFilename(file))
+  const response = await apiRequest<{ media: UploadedMedia }>('/api/admin/media', { method: 'POST', body })
+  return { src: `/media/${response.media.path}`, alt: response.media.alt_text }
 }
 
 function articleSnapshot(): string {
@@ -185,7 +198,7 @@ onMounted(load)
             <span>{{ tag.name }} /{{ tag.slug }}</span>
           </label>
         </fieldset>
-        <label class="wide">Markdown <MarkdownEditor :model-value="editor.article.content_md" :disabled="destructiveActionInFlight" @update:model-value="updateField('content_md', $event)" /></label>
+        <label class="wide">Content <MarkdownEditor :model-value="editor.article.content_md" :disabled="destructiveActionInFlight" :upload-image="uploadEditorImage" @update:model-value="updateField('content_md', $event)" /></label>
         <div class="editor-actions"><button type="submit" class="secondary-button" :disabled="editor.saving.value || destructiveActionInFlight || !editor.dirty.value || Boolean(clientValidationMessage)"><Save :size="16" aria-hidden="true" /> Save now</button><PublishPanel :can-publish="canPublish" :saving="editor.saving.value || destructiveActionInFlight" :actions-locked="destructiveActionsLocked" :status="editor.article.status" @preview="preview" @publish="publish" @archive="archive" /></div>
       </form>
       <section v-if="editor.previewHTML.value" class="preview" aria-labelledby="preview-heading"><h2 id="preview-heading">Preview</h2><div v-html="editor.previewHTML.value" /></section>
@@ -195,19 +208,19 @@ onMounted(load)
 </template>
 
 <style scoped>
-.editor-view { max-width: 1060px; }
+.editor-view { width: 100%; display: grid; gap: 18px; }
 .back-link { display: inline-flex; align-items: center; gap: 5px; margin-bottom: 20px; color: #285e48; font-size: 14px; font-weight: 650; text-decoration: none; }
-.editor-heading { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 22px; }
-h1 { margin: 0; font-size: 28px; letter-spacing: -.025em; }
+.editor-heading { display: flex; justify-content: space-between; align-items: end; gap: 16px; }
+h1 { margin: 0; font-size: clamp(30px, 3vw, 46px); letter-spacing: -.05em; line-height: 1.02; }
 .save-status { color: #637168; font-size: 13px; white-space: nowrap; }.save-status.saving { color: #356b54; }.save-status.conflict, .save-status.error { color: #a33a32; }
-.editor-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.editor-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, .88fr); gap: 18px; padding: clamp(18px, 2.2vw, 28px); border: 1px solid rgb(202 215 205 / 84%); border-radius: 28px; background: var(--admin-panel); box-shadow: var(--admin-shadow); backdrop-filter: blur(18px); }
 label { display: grid; gap: 6px; color: #39463e; font-size: 13px; font-weight: 650; }.wide { grid-column: 1 / -1; }
-input, select, textarea { min-width: 0; border: 1px solid #b9c5be; border-radius: 3px; padding: 9px 10px; font: inherit; background: #fff; } textarea { resize: vertical; }
+input, select, textarea { min-width: 0; border: 1px solid #b9c5be; border-radius: 13px; padding: 11px 12px; font: inherit; background: rgb(255 255 255 / 94%); } textarea { resize: vertical; }
 .tag-options { min-width: 0; border: 0; margin: 0; padding: 0; display: grid; gap: 8px; color: #39463e; font-size: 13px; font-weight: 650; }
 .tag-options legend { padding: 0; margin-bottom: 2px; }
 .checkbox-label { display: flex; align-items: center; gap: 8px; font-weight: 500; }
 .checkbox-label input { min-width: auto; padding: 0; }
-.editor-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border-top: 1px solid #d9dfdb; padding-top: 16px; }.secondary-button { min-height: 38px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border: 1px solid #9eaea5; border-radius: 3px; background: #fff; color: #193d2f; font: inherit; font-weight: 650; cursor: pointer; }
-.preview { border-top: 1px solid #d9dfdb; margin-top: 26px; padding-top: 20px; }.preview h2 { margin: 0 0 12px; font-size: 18px; }.muted { color: #68756d; }
-@media (max-width: 640px) { .editor-form { grid-template-columns: 1fr; }.wide, .editor-actions { grid-column: auto; }.editor-heading { align-items: flex-start; flex-direction: column; } }
+.editor-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border-top: 1px solid #d9dfdb; padding-top: 18px; }.secondary-button { min-height: 42px; display: inline-flex; align-items: center; gap: 7px; padding: 0 14px; border: 1px solid #9eaea5; border-radius: 13px; background: #fff; color: #193d2f; font: inherit; font-weight: 750; cursor: pointer; }
+.preview { border: 1px solid rgb(202 215 205 / 84%); border-radius: 24px; background: var(--admin-panel-strong); margin-top: 8px; padding: 22px; box-shadow: var(--admin-shadow); }.preview h2 { margin: 0 0 12px; font-size: 18px; }.muted { color: #68756d; }
+@media (max-width: 760px) { .editor-form { grid-template-columns: 1fr; border-radius: 22px; }.wide, .editor-actions { grid-column: auto; }.editor-heading { align-items: flex-start; flex-direction: column; } }
 </style>

@@ -24,10 +24,10 @@ const emit = defineEmits<{ restore: [revision: PostRevision] }>()
 </template>
 
 <style scoped>
-.revision-panel { border-top: 1px solid #d9dfdb; padding-top: 20px; }
-h2 { margin: 0 0 10px; font-size: 16px; }
+.revision-panel { padding: 20px; border: 1px solid rgb(202 215 205 / 80%); border-radius: 24px; background: var(--admin-panel-strong); box-shadow: var(--admin-shadow); }
+h2 { margin: 0 0 10px; font-size: 18px; }
 ol { margin: 0; padding: 0; list-style: none; }
-li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid #edf0ee; font-size: 14px; }
-button { min-height: 32px; border: 1px solid #9eaea5; background: #fff; color: #193d2f; font: inherit; cursor: pointer; }
+li { display: flex; justify-content: space-between; gap: 12px; padding: 11px 0; border-top: 1px solid #edf0ee; font-size: 14px; }
+button { min-height: 34px; border: 1px solid #9eaea5; border-radius: 11px; background: #fff; color: #193d2f; font: inherit; cursor: pointer; }
 .muted { color: #6b766f; }
 </style>

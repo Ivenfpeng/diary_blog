@@ -7,7 +7,7 @@
 ## 技术栈
 
 - 后端：Go 1.27、`net/http`/Chi 风格路由、`html/template`、嵌入式静态资源、结构化 `slog` 日志。
-- 管理后台：Vue 3、TypeScript、Vite、Vitest、CodeMirror、Playwright E2E。
+- 管理后台：Vue 3、TypeScript、Vite、Vitest、内置富文本编辑器、Playwright E2E。
 - 存储：SQLite WAL、嵌入式迁移、FTS5 trigram 全文搜索、发布快照、历史版本、online backup。
 - 安全：单管理员、Argon2id 密码哈希、哈希会话、CSRF 双提交校验、登录限流、可信反向代理 CIDR。
 - 运行时：一个 Go 二进制，加 Caddy 反向代理。

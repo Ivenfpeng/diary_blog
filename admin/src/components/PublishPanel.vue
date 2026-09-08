@@ -21,11 +21,11 @@ const emit = defineEmits<{ preview: []; publish: []; archive: [] }>()
 </template>
 
 <style scoped>
-.publish-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.publish-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; width: 100%; }
 .status-label { margin-right: auto; color: #5e6b64; font-size: 13px; text-transform: capitalize; }
-button { min-height: 38px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: 3px; font: inherit; font-weight: 650; cursor: pointer; }
+button { min-height: 42px; display: inline-flex; align-items: center; gap: 7px; padding: 0 14px; border-radius: 13px; font: inherit; font-weight: 750; cursor: pointer; }
 .primary-button { margin: 0; }
 .secondary-button { border: 1px solid #9eaea5; background: #fff; color: #193d2f; }
-.danger-button { border: 1px solid #a6473d; background: #fff; color: #8d3028; }
+.danger-button { border: 1px solid #ba6a61; background: #fff8f6; color: #8d3028; }
 button:disabled { opacity: .6; cursor: wait; }
 </style>
