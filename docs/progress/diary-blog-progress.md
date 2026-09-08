@@ -12,9 +12,9 @@
 
 当前阶段：发布收尾
 
-总体状态：最终整分支复审已通过；Podman 本地 HTTP-only 容器部署、image-only 部署与编辑器保存回归验证通过；HTTPS 部署模式待目标环境实测
+总体状态：最终整分支复审已通过；Podman 本地 HTTP-only 容器部署、image-only 部署、编辑器保存回归与 Markdown 空白区输入回归验证通过；HTTPS 部署模式待目标环境实测
 
-最后登记：2026-09-07 16:57 CST
+最后登记：2026-09-08 09:56 CST
 
 ## 状态定义
 
@@ -49,7 +49,7 @@
 | 8 | 管理员密码、会话与 CSRF | 完成 | `b355547`, `3079e2d`, `4aa0141`, `b8c0977`, `eb6d21b` | 四轮安全复审后通过；Go 全量、race、vet、登录限流与迁移专项测试通过 | 双阶段限流、单管理员、12 小时会话、Cookie/CSRF、密文存储完成 |
 | 9 | 管理文章 API | 完成 | `36d66ad`, `9b413e3` | 一轮独立审查修复后通过；Go 全量、race、vet 与管理 API 契约测试通过 | create/get/list/autosave/preview/publish/archive/revisions/restore 已受会话与 CSRF 保护 |
 | 10 | Vue 后台框架与登录 | 完成 | `2dc1bc6`, `ebc09c8`, `d3d5500` | 独立审查通过；`npm --prefix admin test`、`npm --prefix admin run build` 通过 | 已修正 `/admin` base 路由与匿名 restore 后登录跳转 |
-| 11 | 文章列表与 Markdown 编辑器 | 完成 | `3b18f87`, `7c8cb32`, `3b9df88`, `7fa87a4` | 两轮独立审查修复后通过；`npm --prefix admin test`、`npm --prefix admin run build` 通过 | 已修正 Markdown 父级同步、发布校验与 destructive 操作期间未保存内容保护 |
+| 11 | 文章列表与 Markdown 编辑器 | 完成 | `3b18f87`, `7c8cb32`, `3b9df88`, `7fa87a4`, 本次空白区输入修复 | 两轮独立审查修复后通过；本次补充 Markdown 外层点击聚焦组件红绿测试与 Playwright 空白区输入 E2E；`npm --prefix admin test`、`npm run test:e2e`、`go test ./...`、`make build`、`git diff --check` 通过 | 已修正 Markdown 父级同步、发布校验、destructive 操作期间未保存内容保护，以及点击编辑器大块空白区域不能输入的问题 |
 | 12 | 分类、媒体与站点设置 | 完成 | `f857dca`, `2e37bc6`, `0f63e4b`, `d68ed8a`, `7710281`, `5ea64fb` | 四轮独立审查修复后通过；`go test ./...`、`go vet ./...`、`npm --prefix admin test`、`npm --prefix admin run build`、`git diff --check` 通过 | WebP 使用真实解码；AVIF 采用严格结构/属性/extent 校验而非像素级解码 |
 | 13 | 日志、健康检查、缓存与停机 | 完成 | `aa78da2`, `b106691` | 一轮独立审查修复后通过；Task 13 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已修正 panic 日志状态与 slug 变更后的旧文章缓存失效 |
 | 14 | 备份、恢复、迁移与管理 CLI | 完成 | `7695e9e`, `5bd3db2`, `69ec676`, `e38ca9e`, `a454f28` | 两轮独立审查修复后通过；Task 14 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已改用 SQLite online backup；恢复前校验 checksum、路径白名单、数据库 quick_check 与迁移版本；强制恢复具备 rollback；备份/恢复限制对齐 |
@@ -73,11 +73,11 @@
 - 管理员认证已具备 Argon2id 密码、哈希会话、CSRF 双提交校验、双阶段登录限流与单管理员约束。
 - 管理文章 JSON API 已完成，包含稳定错误 envelope、严格 JSON 解码、2 MiB body 限制、乐观锁冲突映射和显式 admin 路由。
 - Vue 管理后台基础 shell 已完成，包含 typed API client、会话恢复、路由守卫、登录表单、固定侧栏和移动抽屉。
-- 文章列表与 Markdown 编辑器已完成，包含 autosave 串行化、冲突态保护、CodeMirror 生命周期、预览、发布、归档和版本恢复。
+- 文章列表与 Markdown 编辑器已完成，包含 autosave 串行化、冲突态保护、CodeMirror 生命周期、外层空白区域点击聚焦、全高可编辑区域、预览、发布、归档和版本恢复。
 - 分类、标签、媒体库与站点设置已完成，包含 CSRF 管理端点、SQLite 全局 taxonomy slug trigger、10 MiB 媒体上传边界、WebP 解码校验、AVIF 结构校验、媒体 alt text 更新和管理视图 edit/delete 对话框。
 - 运行期能力已完成，包含 JSON slog、请求 ID、访问日志 status/bytes/route pattern、panic recovery、readyz 存储检查、进程内公开页/RSS/Sitemap 缓存、发布/归档缓存失效和 10 秒优雅停机。
 - 备份、恢复、迁移与管理 CLI 已完成，包含 SQLite online backup、`.tar.gz` manifest/checksum、恢复前数据库/迁移验证、强制恢复 rollback、`backup`/`restore`/`migrate`/`admin reset-password`/`search rebuild` 子命令，以及备份输出 media/symlink 防护。
-- 生产容器化已完成，包含 Node 24 + Go 1.27 多阶段 Dockerfile、GHCR 镜像发布 workflow、源码构建 Compose、image-only 部署 Compose、非 root runtime、Compose Blog/Caddy 拓扑、Docker/Podman Compose 命令切换、默认本地/内网 HTTP-only、Caddy 自动 HTTPS、自带 PEM 证书 HTTPS、Caddy 压缩/安全头/10MiB 上传限制、`/data/site` 应用目录、`/data/backups` 备份路径和 restore-safe Makefile 目标。
+- 生产容器化已完成，包含 Node 24 + Go 1.27 多阶段 Dockerfile、GHCR 镜像发布 workflow、源码构建 Compose、image-only 部署 Compose、构建期 `GOPROXY`/`GOSUMDB` 透传、非 root runtime、Compose Blog/Caddy 拓扑、Docker/Podman Compose 命令切换、默认本地/内网 HTTP-only、Caddy 自动 HTTPS、自带 PEM 证书 HTTPS、Caddy 压缩/安全头/10MiB 上传限制、`/data/site` 应用目录、`/data/backups` 备份路径和 restore-safe Makefile 目标。
 - Podman 本地部署验证已完成：`podman-compose` 1.6.0 / Podman 5.8.3，`BLOG_HTTP_PORT=18080`、`BLOG_HTTPS_PORT=18443` 启动成功，`/healthz`、`/readyz`、首页、管理后台入口和容器内备份命令通过。
 - image-only 部署验证已完成：`compose.deploy.yaml` 不包含 `build` 字段，使用 `BLOG_IMAGE=localhost/diary_blog_blog:latest` 直接启动，通过 `/healthz`、`/readyz` 与管理后台资源检查；生产镜像默认指向 `ghcr.io/ivenfpeng/diary_blog:latest`；README 已补充部署机只下载最小 Compose/Caddyfile 配置后执行 `docker compose pull && docker compose up -d` 的路径，并扩展 GHCR、Docker buildx、Podman 单架构/多架构 manifest、Go module proxy build arg、HTTPS、admin 密码、运维命令与排障说明。
 - 管理后台保存体验已修复：非法 slug 会在前端提示并暂停 autosave，不再持续向 `/api/admin/posts/{id}` 发送必然失败的 PUT；slug 表单 `pattern` 已兼容浏览器 `v` flag；文章编辑器改用已存在分类下拉与标签复选框，避免手填不存在 ID 导致保存 400；不存在的分类、标签或封面媒体引用会由后端返回 `post_validation` 400，不再泄露为 500。
@@ -103,6 +103,7 @@
 | R-012 | 中 | 待环境验证 | 当前宿主机无法下载 Playwright bundled Chromium，E2E 默认使用已安装 Chrome channel | CI 或干净开发机需先运行 `npx playwright install chromium` 并使用 `PLAYWRIGHT_BUNDLED_CHROMIUM=1 npm run test:e2e`，或安装可用 Chrome channel |
 | R-013 | 中 | 部分验证 | Docker CLI 缺失导致 Docker 版 `container-release-gate` 与 `restore-smoke` 未实际执行 | Podman Compose 已验证 build/up/health/home/admin/backup；fresh-volume restore-smoke 仍需要先准备带媒体的发布 smoke 文章；HTTPS 自动证书和自带证书模式需在对应目标环境补跑 |
 | R-014 | 低 | 已解决 | 编辑器 autosave 会把明显非法 slug 发给后端，浏览器控制台出现重复 400；不存在分类/标签/封面媒体引用曾被映射成 500 | 已增加前端字段提示与 autosave 暂停；后端将 SQLite 约束错误映射为 `post_validation`；Podman 部署重建后验证通过 |
+| R-015 | 低 | 已解决 | Markdown 编辑器大块白色空白区域不是完整可编辑命中区，点击空白处后键盘输入不会进入 CodeMirror | 已让 CodeMirror scroller/content 撑满编辑器高度，并在点击外层 shell 时主动聚焦编辑器；组件红绿测试与 Playwright 空白区输入 E2E 均通过 |
 
 ## 变更记录
 
@@ -136,6 +137,8 @@
 | 2026-09-07 16:21 CST | 修复管理后台测试报错：将 slug/taxonomy HTML pattern 调整为浏览器 `v` flag 可编译形式；文章编辑器加载分类/标签列表，使用下拉与复选框替代手填 ID，避免不存在 taxonomy 引用触发保存 400；targeted Vitest 通过。 |
 | 2026-09-07 16:53 CST | README 补充 Podman 镜像发布方案：包含单架构 `podman build/push`，以及通过 `podman manifest create/build/push --all` 发布 `linux/amd64` + `linux/arm64` 多架构镜像到 GHCR。 |
 | 2026-09-07 16:57 CST | 针对 Podman 构建时 `go mod download` 访问 `storage.googleapis.com` TLS timeout/EOF，Dockerfile 新增 `GOPROXY`/`GOSUMDB` build arg，README 的 Docker buildx 与 Podman 单/多架构发布命令补充 `--build-arg GOPROXY=https://goproxy.cn,direct`。 |
+| 2026-09-08 09:36 CST | 修复 Markdown 编辑框空白区域无法输入：补充组件级点击外层 shell 聚焦红绿测试和 Playwright 真实浏览器空白区输入/保存 E2E；同时将发布流 E2E 中分类选择更新为下拉框 `selectOption`；`compose.yaml` 透传 `GOPROXY`/`GOSUMDB` 以支持 Podman 源码构建网络切换；前端全量、完整 E2E、Go 全量、构建与 diff 检查均通过。 |
+| 2026-09-08 09:56 CST | 使用 Podman 源码构建重新启动本地 `localhost:18080`：容器内 Go 全量测试通过，`/healthz`、`/readyz` 和 `/admin/` 验证通过；README 补充 `BLOG_PUBLIC_URL` 与 `BLOG_SITE_ADDRESS` 的端口区别，避免把宿主 `18080` 写进 Caddy 容器内监听地址。 |
 
 ## 下一跟进点
 

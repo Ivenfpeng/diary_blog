@@ -22,7 +22,8 @@ revision history, backup/restore, and Docker/Podman Compose deployment.
 ## Deployment files
 
 - `compose.yaml`: builds the image from source. Use it for local development,
-  CI, and release validation.
+  CI, and release validation. It passes `GOPROXY` and `GOSUMDB` environment
+  values into the container build.
 - `compose.deploy.yaml`: pulls and runs `BLOG_IMAGE`. Use it on servers where
   you do not want to clone the source or build locally.
 - `compose.https-auto.yaml`: override for Caddy-managed public HTTPS.
@@ -121,8 +122,8 @@ Important variables:
 | Variable | Purpose |
 | --- | --- |
 | `BLOG_IMAGE` | Application image to run. `latest` must already exist in GHCR. Use a version or sha tag for production. |
-| `BLOG_PUBLIC_URL` | Public site URL used for RSS, Sitemap, generated links, and cookie behavior. |
-| `BLOG_SITE_ADDRESS` | Caddy site address. Use explicit `http://...` for HTTP-only; use a hostname for automatic HTTPS. |
+| `BLOG_PUBLIC_URL` | Public site URL used for RSS, Sitemap, generated links, and cookie behavior. Include the external scheme and host port when applicable, for example `http://localhost:18080`. |
+| `BLOG_SITE_ADDRESS` | Caddy's in-container site address. Use explicit `http://...` for HTTP-only; use a hostname for automatic HTTPS. When Compose maps host `18080` to container `80`, use `http://localhost` here, not `http://localhost:18080`. |
 | `BLOG_HTTP_PORT` | Host HTTP port, default `80`. |
 | `BLOG_HTTPS_PORT` | Host HTTPS port, default `443`. |
 | `CADDY_EMAIL` | ACME email for Caddy automatic HTTPS. |

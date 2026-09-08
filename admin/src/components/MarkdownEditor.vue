@@ -12,6 +12,11 @@ let view: EditorView | undefined
 let syncingFromParent = false
 const editable = new Compartment()
 
+function focusEditor(): void {
+  if (props.disabled) return
+  view?.focus()
+}
+
 onMounted(() => {
   if (!host.value) return
   view = new EditorView({
@@ -49,13 +54,13 @@ onBeforeUnmount(() => view?.destroy())
 </script>
 
 <template>
-  <div ref="host" class="markdown-editor" data-testid="markdown-editor" aria-label="Markdown editor" />
+  <div ref="host" class="markdown-editor" data-testid="markdown-editor" aria-label="Markdown editor" @click.self="focusEditor" />
 </template>
 
 <style scoped>
-.markdown-editor { min-height: 360px; border: 1px solid #cbd3cd; background: #fff; font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.markdown-editor { min-height: 360px; border: 1px solid #cbd3cd; background: #fff; font: 14px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; cursor: text; }
 .markdown-editor :deep(.cm-editor) { min-height: 360px; outline: none; }
-.markdown-editor :deep(.cm-scroller) { overflow: auto; }
-.markdown-editor :deep(.cm-content) { padding: 14px; }
+.markdown-editor :deep(.cm-scroller) { min-height: 360px; overflow: auto; }
+.markdown-editor :deep(.cm-content) { min-height: 360px; padding: 14px; box-sizing: border-box; cursor: text; }
 .markdown-editor :deep(.cm-focused) { outline: 2px solid #75a892; outline-offset: -2px; }
 </style>

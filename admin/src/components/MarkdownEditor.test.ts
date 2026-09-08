@@ -23,4 +23,13 @@ describe('MarkdownEditor', () => {
     expect(wrapper.emitted('update:modelValue')).toEqual([['# Changed by editor']])
     wrapper.unmount()
   })
+
+  it('focuses the editable document when the blank editor shell is clicked', async () => {
+    const wrapper = mount(MarkdownEditor, { attachTo: document.body, props: { modelValue: '' } })
+
+    await wrapper.get('[data-testid="markdown-editor"]').trigger('click')
+
+    expect(document.activeElement).toBe(wrapper.get('.cm-content').element)
+    wrapper.unmount()
+  })
 })

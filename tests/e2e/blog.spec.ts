@@ -22,6 +22,12 @@ async function fillMarkdown(page: Page, editor: Locator, markdown: string): Prom
   await page.keyboard.insertText(markdown)
 }
 
+async function clickMarkdownBlankArea(page: Page, editor: Locator): Promise<void> {
+  const box = await editor.boundingBox()
+  if (!box) throw new Error('Markdown editor is not visible')
+  await page.mouse.click(box.x + 24, box.y + Math.min(160, box.height - 24))
+}
+
 async function expectListingDoesNotExpose(page: Page, path: string, title: string, slug: string): Promise<void> {
   await page.goto(path)
   await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0)
@@ -40,6 +46,22 @@ async function expectFeedAndSitemapDoNotExpose(page: Page, title: string, slug: 
   await page.goto('/sitemap.xml')
   await expect(page.locator('body')).not.toContainText(slug)
 }
+
+test('administrator can type Markdown after clicking the blank editor area', async ({ page }) => {
+  await signIn(page)
+
+  await page.getByRole('link', { name: 'Posts' }).click()
+  await page.getByRole('button', { name: 'New post' }).click()
+  await page.locator('#title').fill('Blank area Markdown input')
+  await page.locator('#slug').fill('blank-area-markdown-input')
+
+  await clickMarkdownBlankArea(page, page.locator('[data-testid="markdown-editor"]'))
+  await page.keyboard.insertText('# Typed from blank area\n\nThe editor should accept input here.')
+
+  await expect(page.locator('.cm-content')).toContainText('Typed from blank area')
+  await page.getByRole('button', { name: 'Save now' }).click()
+  await expect(page.getByText('Saved', { exact: true })).toBeVisible()
+})
 
 test('administrator can publish, revise, restore, and remove a complete article workflow', async ({ page }) => {
   await signIn(page)
@@ -72,7 +94,7 @@ test('administrator can publish, revise, restore, and remove a complete article 
   await page.locator('#title').fill(articleTitle)
   await page.locator('#slug').fill(articleSlug)
   await page.locator('#summary').fill('A browser-verified release workflow.')
-  await page.locator('#category').fill(categoryID)
+  await page.locator('#category').selectOption(categoryID)
   await fillMarkdown(page, page.locator('.cm-content'), `${articleMarkdown}\n![Release-gate image](${uploadedImage})\n`)
   await page.getByRole('button', { name: 'Save now' }).click()
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()
@@ -118,7 +140,7 @@ test('administrator can publish, revise, restore, and remove a complete article 
   const draftSlug = 'private-release-draft'
   await page.locator('#title').fill(draftTitle)
   await page.locator('#slug').fill(draftSlug)
-  await page.locator('#category').fill(categoryID)
+  await page.locator('#category').selectOption(categoryID)
   await fillMarkdown(page, page.locator('.cm-content'), '# Private release draft\nThis must remain private.')
   await page.getByRole('button', { name: 'Save now' }).click()
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()

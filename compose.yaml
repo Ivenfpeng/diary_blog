@@ -2,6 +2,9 @@ services:
   blog:
     build:
       context: .
+      args:
+        GOPROXY: "${GOPROXY:-https://proxy.golang.org,direct}"
+        GOSUMDB: "${GOSUMDB:-sum.golang.org}"
     environment:
       BLOG_ADDR: ":8080"
       BLOG_DATA_DIR: "/data/site"

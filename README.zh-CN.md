@@ -17,7 +17,7 @@
 
 仓库里有两类 Compose 文件：
 
-- `compose.yaml`：给开发机或 CI 从源码构建镜像用，包含 `build`。
+- `compose.yaml`：给开发机或 CI 从源码构建镜像用，包含 `build`，并支持通过 `GOPROXY`/`GOSUMDB` 环境变量透传到容器构建阶段。
 - `compose.deploy.yaml`：给服务器部署用，只拉取 `BLOG_IMAGE` 镜像，不需要源码，也不会本地构建。
 
 HTTPS 是通过 override 文件叠加：
@@ -125,8 +125,8 @@ BLOG_HTTPS_PORT=443
 | 变量 | 说明 |
 | --- | --- |
 | `BLOG_IMAGE` | 要运行的应用镜像。`latest` 必须已经发布到 GHCR，否则会 `not found`。生产建议用版本号或 sha tag 固定。 |
-| `BLOG_PUBLIC_URL` | 公开访问地址，用于 RSS、Sitemap、链接生成和 Cookie 相关行为。外部是 HTTPS 时这里也要写 `https://...`。 |
-| `BLOG_SITE_ADDRESS` | Caddy 站点地址。HTTP-only 必须显式写 `http://...`；自动 HTTPS 写域名即可，如 `ivenpeng.top`。 |
+| `BLOG_PUBLIC_URL` | 公开访问地址，用于 RSS、Sitemap、链接生成和 Cookie 相关行为。外部是 HTTPS 或带宿主端口时，这里也要如实写 `https://...` 或 `http://localhost:18080`。 |
+| `BLOG_SITE_ADDRESS` | Caddy 容器内站点地址。HTTP-only 必须显式写 `http://...`；自动 HTTPS 写域名即可，如 `ivenpeng.top`。使用 Compose 把宿主 `18080` 映射到容器 `80` 时，这里写 `http://localhost`，不要写 `http://localhost:18080`。 |
 | `BLOG_HTTP_PORT` | 宿主机 HTTP 端口，默认 `80`。本机测试可改成 `18080`。 |
 | `BLOG_HTTPS_PORT` | 宿主机 HTTPS 端口，默认 `443`。本机测试可改成 `18443`。 |
 | `CADDY_EMAIL` | Caddy 自动申请证书时用于 ACME 注册和通知。HTTP-only 不需要。 |
@@ -137,7 +137,7 @@ BLOG_HTTPS_PORT=443
 
 ### 本地/内网 HTTP-only
 
-不需要公网域名、邮箱或 TLS 证书。`BLOG_SITE_ADDRESS` 必须带 `http://`，这样 Caddy 不会尝试自动申请证书。
+不需要公网域名、邮箱或 TLS 证书。`BLOG_SITE_ADDRESS` 必须带 `http://`，这样 Caddy 不会尝试自动申请证书。注意 `BLOG_HTTP_PORT` 是宿主机端口映射；本地测试常用 `BLOG_HTTP_PORT=18080`，但 Caddy 容器内仍监听 80，所以 `BLOG_SITE_ADDRESS` 通常保持 `http://localhost`。
 
 ```sh
 docker compose -f compose.deploy.yaml pull
@@ -503,6 +503,7 @@ make compose-health COMPOSE_HEALTH_URL=http://localhost
 本机使用 Podman 时覆盖变量即可：
 
 ```sh
+GOPROXY=https://goproxy.cn,direct \
 make container-build CONTAINER_COMPOSE=podman-compose CONTAINER_RUNTIME=podman
 
 BLOG_PUBLIC_URL=http://localhost:18080 \
