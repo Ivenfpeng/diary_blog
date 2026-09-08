@@ -19,6 +19,32 @@ describe('TaxonomyView', () => {
     expect(pattern).toBeTruthy()
     if (!pattern) throw new Error('missing slug pattern')
     expect(() => new RegExp(pattern, 'v')).not.toThrow()
+    const slugRegExp = new RegExp(`^(?:${pattern})$`, 'v')
+    expect(slugRegExp.test('事实上')).toBe(true)
+    expect(slugRegExp.test('事实-2026')).toBe(true)
+    expect(slugRegExp.test('bad slug')).toBe(false)
+    expect(slugRegExp.test('bad/slug')).toBe(false)
+    expect(slugRegExp.test('bad--slug')).toBe(false)
+  })
+
+  it('creates taxonomy entries with Chinese slugs', async () => {
+    vi.mocked(apiRequest)
+      .mockResolvedValueOnce({ categories: [] })
+      .mockResolvedValueOnce({ tags: [] })
+      .mockResolvedValueOnce({ category: { id: 3, name: '事实上', slug: '事实-2026' } })
+    const wrapper = mount(TaxonomyView)
+    await flushPromises()
+
+    await wrapper.get('input[required]:not([pattern])').setValue('事实上')
+    await wrapper.get('input[pattern]').setValue('事实-2026')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(apiRequest).toHaveBeenCalledWith('/api/admin/categories', {
+      method: 'POST',
+      body: { name: '事实上', slug: '事实-2026' },
+    })
+    expect(wrapper.text()).toContain('/事实-2026')
   })
 
   it('edits and deletes a category', async () => {

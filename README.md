@@ -158,6 +158,26 @@ If HTTPS terminates at Nginx, Traefik, a load balancer, or another gateway,
 keep this stack in HTTP-only mode and set `BLOG_PUBLIC_URL` to the external
 `https://...` URL.
 
+## Content authoring notes
+
+The admin console stores article body content as Markdown. Its built-in rich
+text editor serializes headings, paragraphs, emphasis, quotes, lists, code
+blocks, and uploaded images back to Markdown before saving.
+
+Article, category, and tag slugs support Unicode letters, Unicode numbers, and
+single hyphens. Chinese slugs are valid, for example:
+
+```text
+数据库-笔记-2026
+事实-2026
+```
+
+Spaces, slashes, leading/trailing hyphens, and repeated hyphens are rejected.
+This keeps public routes unambiguous: `/posts/数据库-笔记-2026` is valid, while
+`/posts/数据库/笔记` would be interpreted as multiple path segments. Some tools
+may display copied Chinese URLs as percent-encoded text; that is normal HTTP URL
+encoding.
+
 ## GHCR image notes
 
 The default image is:
@@ -410,4 +430,17 @@ make test
 make vet
 make release-gate
 git diff --check
+```
+
+Playwright E2E defaults to `http://127.0.0.1:18080`. If a local
+Docker/Podman deployment is already using that port, run it on another port:
+
+```sh
+BLOG_E2E_PORT=18082 npm run test:e2e
+```
+
+You can also override the full base URL:
+
+```sh
+BLOG_E2E_BASE_URL=http://127.0.0.1:18082 npm run test:e2e
 ```

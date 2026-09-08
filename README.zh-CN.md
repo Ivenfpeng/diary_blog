@@ -177,6 +177,26 @@ docker compose -f compose.deploy.yaml -f compose.https-files.yaml up -d
 
 如果 HTTPS 已经由 Nginx、Traefik、云负载均衡、NAS 门户或其他网关终止，本 Compose 栈保持 HTTP-only 即可；`BLOG_PUBLIC_URL` 写外部 `https://...`，`BLOG_SITE_ADDRESS` 写内网 HTTP 地址。
 
+## 内容编辑与 Slug 规则
+
+管理后台文章正文使用内置富文本编辑器，保存前会把标题、段落、加粗、斜体、引用、列表、代码块和上传图片序列化回 Markdown。后端仍以 Markdown 作为 canonical 内容源，再通过统一渲染链路发布为 HTML。
+
+文章、分类、标签的 Slug 现在支持 Unicode 字母、Unicode 数字和单个连字符，因此中文 Slug 可以直接使用，例如：
+
+```text
+数据库-笔记-2026
+事实-2026
+```
+
+以下仍然不允许：
+
+- 空格：`我的 文章`
+- 斜杠：`我的/文章`
+- 连续连字符：`my--post`
+- 开头或结尾连字符：`-my-post`、`my-post-`
+
+原因是 Slug 会进入公开 URL。`/posts/数据库-笔记-2026` 是一个清晰的文章路径；如果允许 `/`，`/posts/数据库/笔记` 会被路由识别成多级路径。复制中文 URL 时，某些终端、curl 或日志里可能显示成 `%E6%95%B0...` 这种百分号编码，这是正常的 URL 编码。
+
 ## 镜像发布与 GHCR 注意事项
 
 默认镜像是：
@@ -487,6 +507,18 @@ make test
 make vet
 make release-gate
 git diff --check
+```
+
+Playwright E2E 默认使用 `http://127.0.0.1:18080`。如果本地 Docker/Podman 部署已经占用这个端口，可以换端口运行：
+
+```sh
+BLOG_E2E_PORT=18082 npm run test:e2e
+```
+
+也可以直接覆盖完整访问地址：
+
+```sh
+BLOG_E2E_BASE_URL=http://127.0.0.1:18082 npm run test:e2e
 ```
 
 ## Makefile 入口

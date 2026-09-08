@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { apiRequest } from '../api/client'
+import { slugPatternSource } from '../validation/slug'
 
 type TaxonomyKind = 'categories' | 'tags'
 interface Taxonomy { id: number; name: string; slug: string }
@@ -128,7 +129,7 @@ onMounted(load)
 
       <label>
         <span>Slug</span>
-        <input v-model="slug" required pattern="[a-z0-9\-]+" />
+        <input v-model="slug" required :pattern="slugPatternSource" />
       </label>
 
       <button class="primary-button">Add</button>
@@ -188,7 +189,7 @@ onMounted(load)
 
       <label>
         <span>Slug</span>
-        <input id="taxonomy-edit-slug" v-model="editing.slug" />
+        <input id="taxonomy-edit-slug" v-model="editing.slug" required :pattern="slugPatternSource" />
       </label>
 
       <div class="dialog-actions">

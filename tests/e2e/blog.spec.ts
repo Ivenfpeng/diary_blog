@@ -72,6 +72,21 @@ test('administrator can type Markdown after clicking the blank editor area', asy
   await expect(page.getByText('Saved', { exact: true })).toBeVisible()
 })
 
+test('administrator can create taxonomy entries with Chinese slugs', async ({ page }) => {
+  await signIn(page)
+
+  await page.getByRole('link', { name: 'Categories & tags' }).click()
+  const taxonomyForm = page.locator('.taxonomy-form')
+  await taxonomyForm.getByLabel('Name').fill('事实上')
+  const slugInput = taxonomyForm.getByLabel('Slug')
+  await slugInput.fill('事实-2026')
+  await expect.poll(() => slugInput.evaluate((input) => (input as HTMLInputElement).validity.valid)).toBe(true)
+  await expect.poll(() => slugInput.evaluate((input) => (input as HTMLInputElement).validationMessage)).toBe('')
+  await taxonomyForm.getByRole('button', { name: 'Add' }).click()
+
+  await expect(page.locator('.taxonomy-row').filter({ hasText: '事实上 /事实-2026' })).toBeVisible()
+})
+
 test('administrator can publish, revise, restore, and remove a complete article workflow', async ({ page }) => {
   await signIn(page)
 
@@ -91,7 +106,7 @@ test('administrator can publish, revise, restore, and remove a complete article 
     mimeType: 'image/png',
     buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL2VwAAAABJRU5ErkJggg==', 'base64'),
   })
-  await page.getByLabel('Alt text').fill('A green release-gate pixel')
+  await page.locator('#alt-text').fill('A green release-gate pixel')
   await page.getByRole('button', { name: 'Upload image' }).click()
   await expect(page.getByText('Upload complete.')).toBeVisible()
   const uploadedImage = await page.locator('.media-row img').first().getAttribute('src')

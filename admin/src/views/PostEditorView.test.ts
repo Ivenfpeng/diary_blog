@@ -44,6 +44,11 @@ describe('PostEditorView', () => {
     expect(pattern).toBeTruthy()
     if (!pattern) throw new Error('missing slug pattern')
     expect(() => new RegExp(pattern, 'v')).not.toThrow()
+    const slugRegExp = new RegExp(`^(?:${pattern})$`, 'v')
+    expect(slugRegExp.test('数据库-笔记-2026')).toBe(true)
+    expect(slugRegExp.test('bad slug')).toBe(false)
+    expect(slugRegExp.test('bad/slug')).toBe(false)
+    expect(slugRegExp.test('bad--slug')).toBe(false)
     wrapper.unmount()
   })
 
@@ -121,6 +126,39 @@ describe('PostEditorView', () => {
     wrapper.unmount()
   })
 
+  it('allows Chinese characters in article slugs', async () => {
+    mockedClient.apiRequest.mockResolvedValue({
+      post: {
+        id: 7, slug: '', title: '', summary: '', content_md: '', status: 'draft',
+        category_id: null, tag_ids: [], revision: 3,
+      },
+    })
+
+    const wrapper = mount(PostEditorView, {
+      global: {
+        stubs: {
+          RouterLink: { template: '<a><slot /></a>' },
+          MarkdownEditor: {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<textarea data-testid="markdown-editor" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+          },
+          PublishPanel: { props: ['canPublish'], template: '<button name="publish" :disabled="!canPublish">Publish</button>' },
+          RevisionPanel: true,
+        },
+      },
+    })
+    await vi.waitFor(() => expect(wrapper.find('.editor-form').exists()).toBe(true))
+
+    await wrapper.get('#title').setValue('数据库笔记')
+    await wrapper.get('#slug').setValue('数据库-笔记-2026')
+    await wrapper.get('[data-testid="markdown-editor"]').setValue('# 数据库笔记')
+
+    expect(wrapper.text()).not.toContain('Slug must')
+    expect(wrapper.get('button[name="publish"]').attributes('disabled')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('keeps publishing disabled for slugs rejected by the server', async () => {
     mockedClient.apiRequest.mockResolvedValue({
       post: {
@@ -182,7 +220,7 @@ describe('PostEditorView', () => {
     await wrapper.get('#slug').setValue('中文 slug')
     await vi.advanceTimersByTimeAsync(1600)
 
-    expect(wrapper.text()).toContain('Slug must use lowercase letters, numbers, and single hyphens.')
+    expect(wrapper.text()).toContain('Slug must use Chinese or other letters, numbers, and single hyphens.')
     expect(mockedClient.apiRequest.mock.calls.some(([path, options]) => path === '/api/admin/posts/7' && options?.method === 'PUT')).toBe(false)
     wrapper.unmount()
   })

@@ -14,7 +14,7 @@ import (
 
 const maxContentBytes = 2 * 1024 * 1024
 
-var slugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+var slugPattern = regexp.MustCompile(`^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$`)
 
 type Service struct {
 	repo     Repository

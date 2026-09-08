@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { FullConfig } from '@playwright/test'
+import { e2eBaseURL, e2eListenAddress } from './config'
 
-const baseURL = 'http://127.0.0.1:18080'
 const username = 'release-gate-admin'
 const password = 'release-gate-password'
 
@@ -13,7 +13,7 @@ async function waitForReady(process: ChildProcess): Promise<void> {
   while (Date.now() < deadline) {
     if (process.exitCode !== null) throw new Error(`Blog server exited with code ${process.exitCode}`)
     try {
-      const response = await fetch(`${baseURL}/readyz`)
+      const response = await fetch(`${e2eBaseURL}/readyz`)
       if (response.status === 204) return
     } catch {
       // The server is still starting.
@@ -29,9 +29,9 @@ export default async function globalSetup(_config: FullConfig): Promise<() => Pr
   const binary = join(runtimeDir, 'blog')
   const env = {
     ...process.env,
-    BLOG_ADDR: '127.0.0.1:18080',
+    BLOG_ADDR: e2eListenAddress(),
     BLOG_DATA_DIR: dataDir,
-    BLOG_PUBLIC_URL: baseURL,
+    BLOG_PUBLIC_URL: e2eBaseURL,
     GOCACHE: process.env.GOCACHE ?? '/tmp/diary-blog-go-cache',
   }
   execFileSync('go', ['build', '-o', binary, './cmd/blog'], {

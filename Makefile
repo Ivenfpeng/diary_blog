@@ -50,7 +50,7 @@ sync-admin:
 	cp -R admin/dist web/admin
 
 build: admin-build sync-admin
-	go build -o bin/blog ./cmd/blog
+	GOCACHE=$(GO_CACHE) go build -o bin/blog ./cmd/blog
 
 release-gate: test-go test-admin admin-build test-e2e vet
 

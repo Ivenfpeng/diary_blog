@@ -12,9 +12,9 @@
 
 当前阶段：发布收尾
 
-总体状态：最终整分支复审已通过；Podman 本地 HTTP-only 容器部署、image-only 部署、编辑器保存回归、Markdown 空白区输入回归与富文本图片上传编辑回归验证通过；HTTPS 部署模式待目标环境实测
+总体状态：最终整分支复审已通过；Podman 本地 HTTP-only 容器部署、image-only 部署、编辑器保存回归、Markdown 空白区输入回归、富文本图片上传编辑回归与中文 Slug 校验回归验证通过；HTTPS 部署模式待目标环境实测
 
-最后登记：2026-09-08 14:05 CST
+最后登记：2026-09-08 14:47 CST
 
 ## 状态定义
 
@@ -49,8 +49,8 @@
 | 8 | 管理员密码、会话与 CSRF | 完成 | `b355547`, `3079e2d`, `4aa0141`, `b8c0977`, `eb6d21b` | 四轮安全复审后通过；Go 全量、race、vet、登录限流与迁移专项测试通过 | 双阶段限流、单管理员、12 小时会话、Cookie/CSRF、密文存储完成 |
 | 9 | 管理文章 API | 完成 | `36d66ad`, `9b413e3` | 一轮独立审查修复后通过；Go 全量、race、vet 与管理 API 契约测试通过 | create/get/list/autosave/preview/publish/archive/revisions/restore 已受会话与 CSRF 保护 |
 | 10 | Vue 后台框架与登录 | 完成 | `2dc1bc6`, `ebc09c8`, `d3d5500` | 独立审查通过；`npm --prefix admin test`、`npm --prefix admin run build` 通过 | 已修正 `/admin` base 路由与匿名 restore 后登录跳转 |
-| 11 | 文章列表与富文本编辑器 | 完成 | `3b18f87`, `7c8cb32`, `3b9df88`, `7fa87a4`, 本次富文本/图片上传修复 | 两轮独立审查修复后通过；本次补充富文本 DOM 到 Markdown 序列化、编辑器内图片上传插入、外层点击聚焦组件测试与 Playwright 空白区输入/图片上传 E2E；`npm --prefix admin test`、`npm run test:e2e`、`go test ./...`、`make build`、`git diff --check` 通过 | 已从 CodeMirror Markdown 纯文本编辑升级为内置富文本编辑器；后端仍以 Markdown 为 canonical 存储和发布源 |
-| 12 | 分类、媒体与站点设置 | 完成 | `f857dca`, `2e37bc6`, `0f63e4b`, `d68ed8a`, `7710281`, `5ea64fb` | 四轮独立审查修复后通过；`go test ./...`、`go vet ./...`、`npm --prefix admin test`、`npm --prefix admin run build`、`git diff --check` 通过 | WebP 使用真实解码；AVIF 采用严格结构/属性/extent 校验而非像素级解码 |
+| 11 | 文章列表与富文本编辑器 | 完成 | `3b18f87`, `7c8cb32`, `3b9df88`, `7fa87a4`, 本次富文本/图片上传修复 | 两轮独立审查修复后通过；本次补充富文本 DOM 到 Markdown 序列化、编辑器内图片上传插入、外层点击聚焦组件测试、中文文章 Slug 校验与 Playwright 空白区输入/图片上传 E2E；`npm --prefix admin test`、`npm run test:e2e`、`go test ./...`、`make build`、`git diff --check` 通过 | 已从 CodeMirror Markdown 纯文本编辑升级为内置富文本编辑器；后端仍以 Markdown 为 canonical 存储和发布源；文章 Slug 支持中文/Unicode 字母数字与单连字符 |
+| 12 | 分类、媒体与站点设置 | 完成 | `f857dca`, `2e37bc6`, `0f63e4b`, `d68ed8a`, `7710281`, `5ea64fb` | 四轮独立审查修复后通过；本次补充分类/标签中文 Slug 前后端校验回归；`go test ./...`、`go vet ./...`、`npm --prefix admin test`、`npm --prefix admin run build`、`git diff --check` 通过 | WebP 使用真实解码；AVIF 采用严格结构/属性/extent 校验而非像素级解码；taxonomy Slug 支持中文/Unicode 字母数字与单连字符 |
 | 13 | 日志、健康检查、缓存与停机 | 完成 | `aa78da2`, `b106691` | 一轮独立审查修复后通过；Task 13 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已修正 panic 日志状态与 slug 变更后的旧文章缓存失效 |
 | 14 | 备份、恢复、迁移与管理 CLI | 完成 | `7695e9e`, `5bd3db2`, `69ec676`, `e38ca9e`, `a454f28` | 两轮独立审查修复后通过；Task 14 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已改用 SQLite online backup；恢复前校验 checksum、路径白名单、数据库 quick_check 与迁移版本；强制恢复具备 rollback；备份/恢复限制对齐 |
 | 15 | 生产构建与 Docker/Podman Compose | 完成 | `aa80ca1`, `b52e4d0`, `e3c5117`, `a1128fa` | 两轮独立审查修复后通过；`npm --prefix admin test`、`npm --prefix admin run build`、`go test ./...`、`go vet ./...`、YAML parse、Makefile dry-run 与 `git diff --check` 通过；Podman Compose 本地 HTTP-only build/up/health/home/admin/backup 验证通过 | 已支持默认 HTTP-only、本地/内网部署、Caddy 自动 HTTPS、自带证书 HTTPS 和 Docker/Podman 命令切换；HTTPS 模式需在具备域名/证书的目标环境补跑 |
@@ -80,8 +80,8 @@
 - 生产容器化已完成，包含 Node 24 + Go 1.27 多阶段 Dockerfile、GHCR 镜像发布 workflow、源码构建 Compose、image-only 部署 Compose、构建期 `GOPROXY`/`GOSUMDB` 透传、非 root runtime、Compose Blog/Caddy 拓扑、Docker/Podman Compose 命令切换、默认本地/内网 HTTP-only、Caddy 自动 HTTPS、自带 PEM 证书 HTTPS、Caddy 压缩/安全头/10MiB 上传限制、`/data/site` 应用目录、`/data/backups` 备份路径和 restore-safe Makefile 目标。
 - Podman 本地部署验证已完成：`podman-compose` 1.6.0 / Podman 5.8.3，`BLOG_HTTP_PORT=18080`、`BLOG_HTTPS_PORT=18443` 启动成功，`/healthz`、`/readyz`、首页、管理后台入口和容器内备份命令通过。
 - image-only 部署验证已完成：`compose.deploy.yaml` 不包含 `build` 字段，使用 `BLOG_IMAGE=localhost/diary_blog_blog:latest` 直接启动，通过 `/healthz`、`/readyz` 与管理后台资源检查；生产镜像默认指向 `ghcr.io/ivenfpeng/diary_blog:latest`；README 已补充部署机只下载最小 Compose/Caddyfile 配置后执行 `docker compose pull && docker compose up -d` 的路径，并扩展 GHCR、Docker buildx、Podman 单架构/多架构 manifest、Go module proxy build arg、HTTPS、admin 密码、运维命令与排障说明。
-- 管理后台保存体验已修复：非法 slug 会在前端提示并暂停 autosave，不再持续向 `/api/admin/posts/{id}` 发送必然失败的 PUT；slug 表单 `pattern` 已兼容浏览器 `v` flag；文章编辑器改用已存在分类下拉与标签复选框，避免手填不存在 ID 导致保存 400；不存在的分类、标签或封面媒体引用会由后端返回 `post_validation` 400，不再泄露为 500。
-- E2E 与发布门禁已完成，包含 Playwright 完整写作流、draft/archived 在首页/分类/归档/搜索/RSS/Sitemap 的公开排除验证、桌面/平板/移动响应式重叠/遮挡/裁切断言、截图产物、非容器 release gate，以及 Compose fresh-volume restore-smoke 目标。
+- 管理后台保存体验已修复：非法 slug 会在前端提示并暂停 autosave，不再持续向 `/api/admin/posts/{id}` 发送必然失败的 PUT；slug 表单 `pattern` 已兼容浏览器 `v` flag 并支持中文/Unicode 字母数字；文章编辑器改用已存在分类下拉与标签复选框，避免手填不存在 ID 导致保存 400；不存在的分类、标签或封面媒体引用会由后端返回 `post_validation` 400，不再泄露为 500。
+- E2E 与发布门禁已完成，包含 Playwright 完整写作流、中文 taxonomy slug 浏览器校验、draft/archived 在首页/分类/归档/搜索/RSS/Sitemap 的公开排除验证、桌面/平板/移动响应式重叠/遮挡/裁切断言、可覆盖 `BLOG_E2E_PORT`/`BLOG_E2E_BASE_URL` 的本地测试端口、截图产物、非容器 release gate，以及 Compose fresh-volume restore-smoke 目标。
 - 最终整分支复审修复已完成，包含有界/LRU/代际公共缓存、发布期间编辑锁、公共站点设置/RSS/SEO 消费与缓存失效、分页浏览与搜索、Linux 非 root 可读的 restore-smoke staging volume，以及 fail-fast restore-smoke 检查。
 - 工作区仍包含 `.gitignore`、`.idea/`、`.metrics/` 用户改动；从本次起 `docs/progress/` 作为总控文档持续更新。
 
@@ -105,6 +105,7 @@
 | R-014 | 低 | 已解决 | 编辑器 autosave 会把明显非法 slug 发给后端，浏览器控制台出现重复 400；不存在分类/标签/封面媒体引用曾被映射成 500 | 已增加前端字段提示与 autosave 暂停；后端将 SQLite 约束错误映射为 `post_validation`；Podman 部署重建后验证通过 |
 | R-015 | 低 | 已解决 | Markdown 编辑器大块白色空白区域不是完整可编辑命中区，点击空白处后键盘输入不会进入 CodeMirror | 已让 CodeMirror scroller/content 撑满编辑器高度，并在点击外层 shell 时主动聚焦编辑器；组件红绿测试与 Playwright 空白区输入 E2E 均通过 |
 | R-016 | 中 | 已缓解 | 富文本编辑器需要继续保持后端 Markdown canonical，不应引入 HTML 存储或绕过现有 Markdown 安全渲染链路 | 新编辑器在前端将 h1/h2/h3、段落、加粗、斜体、引用、列表、代码块和图片序列化为 Markdown；图片上传复用 `/api/admin/media` 的 MIME/大小/alt 校验；后端公开渲染链路不变 |
+| R-017 | 低 | 已解决 | 文章和 taxonomy Slug 最初只允许英文数字连字符，中文分类/标签会被浏览器 HTML pattern 直接拦截 | 已统一前端与后端 Slug 规则为 Unicode 字母/数字 + 单连字符；继续拒绝空格、斜杠、连续连字符和首尾连字符，避免公开路由歧义 |
 
 ## 变更记录
 
@@ -141,6 +142,7 @@
 | 2026-09-08 09:36 CST | 修复 Markdown 编辑框空白区域无法输入：补充组件级点击外层 shell 聚焦红绿测试和 Playwright 真实浏览器空白区输入/保存 E2E；同时将发布流 E2E 中分类选择更新为下拉框 `selectOption`；`compose.yaml` 透传 `GOPROXY`/`GOSUMDB` 以支持 Podman 源码构建网络切换；前端全量、完整 E2E、Go 全量、构建与 diff 检查均通过。 |
 | 2026-09-08 09:56 CST | 使用 Podman 源码构建重新启动本地 `localhost:18080`：容器内 Go 全量测试通过，`/healthz`、`/readyz` 和 `/admin/` 验证通过；README 补充 `BLOG_PUBLIC_URL` 与 `BLOG_SITE_ADDRESS` 的端口区别，避免把宿主 `18080` 写进 Caddy 容器内监听地址。 |
 | 2026-09-08 14:05 CST | 后台编辑器升级为内置富文本编辑器：提供段落、H1/H2、加粗、斜体、列表、引用和图片上传工具栏；图片上传复用现有媒体 API 并插入为 Markdown 图片；移除未使用 CodeMirror 前端依赖，构建包体明显下降；总控文档、README 技术栈与 E2E 回归同步更新。 |
+| 2026-09-08 14:47 CST | 修复中文 Slug 不可用：文章、分类和标签 Slug 前端 pattern 与 Go 后端正则统一支持 Unicode 字母/数字和单连字符；保留空格、斜杠、连续连字符、首尾连字符禁用；补充中英文 README 说明、Playwright 中文 taxonomy slug 回归和 E2E 可换端口配置，避免本地 Podman 占用 18080 时发布门禁无法启动。 |
 
 ## 下一跟进点
 

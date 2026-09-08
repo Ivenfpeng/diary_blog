@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test'
+import { e2eBaseURL } from './tests/e2e/config'
 
 const browserChannel = process.env.PLAYWRIGHT_BUNDLED_CHROMIUM === '1' ? undefined : (process.env.PLAYWRIGHT_CHANNEL ?? 'chrome')
 
@@ -11,7 +12,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   outputDir: '/tmp/diary-blog-e2e-results',
   use: {
-    baseURL: 'http://127.0.0.1:18080',
+    baseURL: e2eBaseURL,
     browserName: 'chromium',
     ...(browserChannel ? { channel: browserChannel } : {}),
     trace: 'retain-on-failure',

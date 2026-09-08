@@ -15,7 +15,7 @@ var (
 	ErrReferenced = errors.New("management resource is referenced")
 )
 
-var taxonomySlugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+var taxonomySlugPattern = regexp.MustCompile(`^[\p{L}\p{N}]+(?:-[\p{L}\p{N}]+)*$`)
 
 type Taxonomy struct {
 	ID        int64     `json:"id"`

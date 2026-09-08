@@ -53,6 +53,14 @@ func TestServicePublishValidatesAndRendersPost(t *testing.T) {
 	if published.Status != content.StatusPublished || published.ContentHTML == "" || strings.Contains(published.ContentHTML, "<script") {
 		t.Fatalf("unexpected published post: %+v", published)
 	}
+
+	unicodeSlug, err := service.CreateDraft(ctx, content.PostInput{Slug: "数据库-笔记-2026", Title: "数据库笔记", ContentMD: "body"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Publish(ctx, unicodeSlug.ID, unicodeSlug.Revision); err != nil {
+		t.Fatalf("publish unicode slug = %v", err)
+	}
 }
 
 func TestServiceRenderFailureLeavesPublishedPostUnchanged(t *testing.T) {
@@ -112,5 +120,10 @@ func TestServiceRejectsInvalidIdentifiersPaginationAndOversizedContent(t *testin
 	}
 	if _, err := service.CreateDraft(ctx, content.PostInput{Slug: "too-large", Title: "Too Large", ContentMD: strings.Repeat("x", 2*1024*1024+1)}); !errors.Is(err, posts.ErrValidation) {
 		t.Fatalf("content size error = %v, want ErrValidation", err)
+	}
+	for _, slug := range []string{"bad slug", "bad/slug", "bad--slug", "-bad", "bad-"} {
+		if _, err := service.CreateDraft(ctx, content.PostInput{Slug: slug, Title: "Bad Slug", ContentMD: "body"}); !errors.Is(err, posts.ErrValidation) {
+			t.Fatalf("slug %q error = %v, want ErrValidation", slug, err)
+		}
 	}
 }

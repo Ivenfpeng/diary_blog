@@ -7,6 +7,7 @@ import PublishPanel from '../components/PublishPanel.vue'
 import RevisionPanel, { type PostRevision } from '../components/RevisionPanel.vue'
 import { apiRequest } from '../api/client'
 import { createEditorState, type EditablePost } from '../state/editor'
+import { slugPatternSource, slugRegExp, slugValidationMessage } from '../validation/slug'
 
 interface TaxonomyOption { id: number; name: string; slug: string }
 interface UploadedMedia { path: string; alt_text: string }
@@ -21,14 +22,13 @@ const restoring = ref(false)
 const destructiveActionInFlight = ref(false)
 const errorMessage = ref('')
 const postID = computed(() => Number(route.params.id))
-const publishSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const maxContentBytes = 2 * 1024 * 1024
 const textEncoder = new TextEncoder()
 
 const clientValidationMessage = computed(() => {
   const titleBytes = textEncoder.encode(editor.article.title).length
   const contentBytes = textEncoder.encode(editor.article.content_md).length
-  if (editor.article.slug && !publishSlugPattern.test(editor.article.slug)) return 'Slug must use lowercase letters, numbers, and single hyphens.'
+  if (editor.article.slug && !slugRegExp.test(editor.article.slug)) return slugValidationMessage
   if (/[\r\n]/.test(editor.article.title)) return 'Title must stay on one line.'
   if (titleBytes > 300) return 'Title must be 300 bytes or fewer.'
   if (contentBytes > maxContentBytes) return 'Markdown must be 2 MiB or smaller.'
@@ -57,7 +57,7 @@ const canPublish = computed(() => Boolean(
   editor.article.title.trim()
   && !/[\r\n]/.test(editor.article.title)
   && textEncoder.encode(editor.article.title).length <= 300
-  && publishSlugPattern.test(editor.article.slug)
+  && slugRegExp.test(editor.article.slug)
   && editor.article.content_md.trim()
   && textEncoder.encode(editor.article.content_md).length <= maxContentBytes,
 ) && !editor.saving.value)
@@ -186,7 +186,7 @@ onMounted(load)
       <p v-if="editor.conflict.value" class="form-error" role="alert">This article changed elsewhere. Your local Markdown is preserved; reload before saving again.</p>
       <form class="editor-form" @submit.prevent="saveNow">
         <label>Title <input id="title" :value="editor.article.title" required :disabled="destructiveActionInFlight" @input="updateField('title', ($event.target as HTMLInputElement).value)" /></label>
-        <label>Slug <input id="slug" :value="editor.article.slug" required pattern="[a-z0-9\-]+" :disabled="destructiveActionInFlight" @input="updateField('slug', ($event.target as HTMLInputElement).value)" /></label>
+        <label>Slug <input id="slug" :value="editor.article.slug" required :pattern="slugPatternSource" :disabled="destructiveActionInFlight" @input="updateField('slug', ($event.target as HTMLInputElement).value)" /></label>
         <p v-if="clientValidationMessage" class="form-error wide" role="alert">{{ clientValidationMessage }}</p>
         <label class="wide">Summary <textarea id="summary" :value="editor.article.summary" rows="3" :disabled="destructiveActionInFlight" @input="updateField('summary', ($event.target as HTMLTextAreaElement).value)" /></label>
         <label>Category <select id="category" :value="editor.article.category_id ?? ''" :disabled="destructiveActionInFlight" @change="updateCategory(($event.target as HTMLSelectElement).value)"><option value="">No category</option><option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }} /{{ category.slug }}</option></select></label>

@@ -33,6 +33,25 @@ func TestTaxonomyRejectsDuplicateSlugsAndReferencedCategoryDeletion(t *testing.T
 	}
 }
 
+func TestTaxonomyAcceptsUnicodeSlugsAndRejectsUnsafeSeparators(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newPostRepository(t)
+	now := time.Date(2026, 9, 5, 10, 0, 0, 0, time.UTC)
+
+	category, err := repo.CreateCategory(ctx, sqliterepo.TaxonomyInput{Name: "事实上", Slug: "事实-2026"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if category.Slug != "事实-2026" {
+		t.Fatalf("unicode category slug = %q", category.Slug)
+	}
+	for _, slug := range []string{"bad slug", "bad/slug", "bad--slug", "-bad", "bad-"} {
+		if _, err := repo.CreateTag(ctx, sqliterepo.TaxonomyInput{Name: "Bad", Slug: slug}, now); !errors.Is(err, sqliterepo.ErrValidation) {
+			t.Fatalf("slug %q error = %v, want ErrValidation", slug, err)
+		}
+	}
+}
+
 func TestTaxonomySlugInvariantCannotBeBypassedAtDatabaseLevel(t *testing.T) {
 	ctx := context.Background()
 	_, db := newPostRepository(t)
