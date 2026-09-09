@@ -180,7 +180,9 @@ Spaces, slashes, leading/trailing hyphens, and repeated hyphens are rejected.
 This keeps public routes unambiguous: `/posts/数据库-笔记-2026` is valid, while
 `/posts/数据库/笔记` would be interpreted as multiple path segments. Some tools
 may display copied Chinese URLs as percent-encoded text; that is normal HTTP URL
-encoding.
+encoding. The public router decodes percent-encoded slugs before lookup, so
+uppercase and lowercase escape sequences such as `%E8...` and `%e8...` resolve
+to the same article.
 
 When a new article has no manual slug yet, the admin editor generates one from
 the title automatically. Editing the slug field turns off title-based updates

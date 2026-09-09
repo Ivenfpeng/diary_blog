@@ -126,6 +126,32 @@ func TestPublicArticleRendersCanonicalSafeContentReadingTimeAndTOC(t *testing.T)
 	}
 }
 
+func TestPublicArticleAcceptsLowercasePercentEncodedUnicodeSlug(t *testing.T) {
+	repo, _, _, closeDB := publicFixture(t)
+	t.Cleanup(closeDB)
+	server := httptest.NewServer(web.NewServer(repo))
+	t.Cleanup(server.Close)
+
+	service := posts.NewService(repo, content.NewRenderer(), func() time.Time { return time.Date(2026, 9, 4, 15, 0, 0, 0, time.UTC) })
+	post, err := service.CreateDraft(context.Background(), content.PostInput{
+		Slug: "这是我做的第一个博客系统", Title: "第一条博客", Summary: "中文 URL",
+		ContentMD: "公开正文", TagIDs: []int64{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Publish(context.Background(), post.ID, post.Revision); err != nil {
+		t.Fatal(err)
+	}
+
+	body := getHTML(t, server.URL+"/posts/%e8%bf%99%e6%98%af%e6%88%91%e5%81%9a%e7%9a%84%e7%ac%ac%e4%b8%80%e4%b8%aa%e5%8d%9a%e5%ae%a2%e7%b3%bb%e7%bb%9f")
+	for _, want := range []string{"第一条博客", "公开正文"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("lowercase percent-encoded unicode slug response missing %q\n%s", want, body)
+		}
+	}
+}
+
 func TestPublicListingRoutesRenderPublishedHTMLOnly(t *testing.T) {
 	repo, _, _, closeDB := publicFixture(t)
 	t.Cleanup(closeDB)

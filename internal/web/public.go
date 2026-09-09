@@ -99,11 +99,11 @@ func newPublicHandler(repository posts.Repository, publicURL string, clock func(
 
 func (h *publicHandler) routes(router chi.Router) {
 	router.Get("/", h.cached(func(r *http.Request) string { return site.HomeCacheKeyForPage(pageNumber(r)) }, "text/html; charset=utf-8", h.home))
-	router.Get("/posts/{slug}", h.cached(func(r *http.Request) string { return site.ArticleCacheKey(chi.URLParam(r, "slug")) }, "text/html; charset=utf-8", h.article))
+	router.Get("/posts/{slug}", h.cached(func(r *http.Request) string { return site.ArticleCacheKey(slugParam(r)) }, "text/html; charset=utf-8", h.article))
 	router.Get("/categories/{slug}", h.cached(func(r *http.Request) string {
-		return site.CategoryCacheKeyForPage(chi.URLParam(r, "slug"), pageNumber(r))
+		return site.CategoryCacheKeyForPage(slugParam(r), pageNumber(r))
 	}, "text/html; charset=utf-8", h.category))
-	router.Get("/tags/{slug}", h.cached(func(r *http.Request) string { return site.TagCacheKeyForPage(chi.URLParam(r, "slug"), pageNumber(r)) }, "text/html; charset=utf-8", h.tag))
+	router.Get("/tags/{slug}", h.cached(func(r *http.Request) string { return site.TagCacheKeyForPage(slugParam(r), pageNumber(r)) }, "text/html; charset=utf-8", h.tag))
 	router.Get("/archive", h.cached(func(r *http.Request) string { return site.ArchiveCacheKeyForPage(pageNumber(r)) }, "text/html; charset=utf-8", h.archive))
 	router.Get("/search", h.search)
 	router.Get("/rss.xml", h.cached(func(*http.Request) string { return site.RSSCacheKey() }, "application/xml; charset=utf-8", h.rss))
@@ -156,7 +156,7 @@ func (h *publicHandler) home(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *publicHandler) category(w http.ResponseWriter, r *http.Request) {
-	slug := chi.URLParam(r, "slug")
+	slug := slugParam(r)
 	page, ok := h.validPage(w, r)
 	if !ok {
 		return
@@ -165,7 +165,7 @@ func (h *publicHandler) category(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *publicHandler) tag(w http.ResponseWriter, r *http.Request) {
-	slug := chi.URLParam(r, "slug")
+	slug := slugParam(r)
 	page, ok := h.validPage(w, r)
 	if !ok {
 		return
@@ -278,7 +278,7 @@ func (h *publicHandler) renderListing(w http.ResponseWriter, r *http.Request, te
 }
 
 func (h *publicHandler) article(w http.ResponseWriter, r *http.Request) {
-	post, err := h.repository.GetPublishedBySlug(r.Context(), chi.URLParam(r, "slug"))
+	post, err := h.repository.GetPublishedBySlug(r.Context(), slugParam(r))
 	if err == posts.ErrNotFound {
 		h.error(w, r, http.StatusNotFound, "This article is not published or no longer exists.")
 		return
@@ -306,6 +306,15 @@ func (h *publicHandler) article(w http.ResponseWriter, r *http.Request) {
 		data.OpenGraphImage = h.mediaURL(post.CoverMediaPath)
 	}
 	h.render(w, r, http.StatusOK, "article.html", data)
+}
+
+func slugParam(r *http.Request) string {
+	slug := chi.URLParam(r, "slug")
+	decoded, err := url.PathUnescape(slug)
+	if err != nil {
+		return slug
+	}
+	return decoded
 }
 
 func (h *publicHandler) error(w http.ResponseWriter, r *http.Request, status int, description string) {

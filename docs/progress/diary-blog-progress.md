@@ -12,9 +12,9 @@
 
 当前阶段：发布收尾
 
-总体状态：最终整分支复审已通过；Podman 本地 HTTP-only 容器部署、image-only 部署、编辑器保存回归、Markdown 空白区输入回归、富文本图片上传/粘贴编辑回归、标题自动中文 Slug 与中文 Slug 校验回归验证通过；HTTPS 部署模式待目标环境实测
+总体状态：最终整分支复审已通过；Podman 本地 HTTP-only 容器部署、image-only 部署、编辑器保存回归、Markdown 空白区输入回归、富文本图片上传/粘贴编辑回归、标题自动中文 Slug、中文 Slug 校验与大小写 percent-encoding 公开访问回归验证通过；HTTPS 部署模式待目标环境实测
 
-最后登记：2026-09-09 10:06 CST
+最后登记：2026-09-09 11:03 CST
 
 ## 状态定义
 
@@ -49,7 +49,7 @@
 | 8 | 管理员密码、会话与 CSRF | 完成 | `b355547`, `3079e2d`, `4aa0141`, `b8c0977`, `eb6d21b` | 四轮安全复审后通过；Go 全量、race、vet、登录限流与迁移专项测试通过 | 双阶段限流、单管理员、12 小时会话、Cookie/CSRF、密文存储完成 |
 | 9 | 管理文章 API | 完成 | `36d66ad`, `9b413e3` | 一轮独立审查修复后通过；Go 全量、race、vet 与管理 API 契约测试通过 | create/get/list/autosave/preview/publish/archive/revisions/restore 已受会话与 CSRF 保护 |
 | 10 | Vue 后台框架与登录 | 完成 | `2dc1bc6`, `ebc09c8`, `d3d5500` | 独立审查通过；`npm --prefix admin test`、`npm --prefix admin run build` 通过 | 已修正 `/admin` base 路由与匿名 restore 后登录跳转 |
-| 11 | 文章列表与富文本编辑器 | 完成 | `3b18f87`, `7c8cb32`, `3b9df88`, `7fa87a4`, 本次富文本/图片上传修复 | 两轮独立审查修复后通过；本次补充富文本 DOM 到 Markdown 序列化、编辑器内图片上传/粘贴插入、data URL 图片拦截、标题自动中文 Slug、公开媒体路由回归、外层点击聚焦组件测试、中文文章 Slug 校验与 Playwright 空白区输入/图片粘贴 E2E；`npm --prefix admin test`、`npm run test:e2e`、`go test ./...`、`make build`、`git diff --check` 通过 | 已从 CodeMirror Markdown 纯文本编辑升级为内置富文本编辑器；后端仍以 Markdown 为 canonical 存储和发布源；文章 Slug 支持中文/Unicode 字母数字与单连字符 |
+| 11 | 文章列表与富文本编辑器 | 完成 | `3b18f87`, `7c8cb32`, `3b9df88`, `7fa87a4`, 本次富文本/图片上传修复 | 两轮独立审查修复后通过；本次补充富文本 DOM 到 Markdown 序列化、编辑器内图片上传/粘贴插入、data URL 图片拦截、标题自动中文 Slug、公开媒体路由回归、中文 URL 大小写 percent-encoding 回归、外层点击聚焦组件测试、中文文章 Slug 校验与 Playwright 空白区输入/图片粘贴 E2E；`npm --prefix admin test`、`npm run test:e2e`、`go test ./...`、`make build`、`git diff --check` 通过 | 已从 CodeMirror Markdown 纯文本编辑升级为内置富文本编辑器；后端仍以 Markdown 为 canonical 存储和发布源；文章 Slug 支持中文/Unicode 字母数字与单连字符 |
 | 12 | 分类、媒体与站点设置 | 完成 | `f857dca`, `2e37bc6`, `0f63e4b`, `d68ed8a`, `7710281`, `5ea64fb` | 四轮独立审查修复后通过；本次补充分类/标签中文 Slug 前后端校验回归；`go test ./...`、`go vet ./...`、`npm --prefix admin test`、`npm --prefix admin run build`、`git diff --check` 通过 | WebP 使用真实解码；AVIF 采用严格结构/属性/extent 校验而非像素级解码；taxonomy Slug 支持中文/Unicode 字母数字与单连字符 |
 | 13 | 日志、健康检查、缓存与停机 | 完成 | `aa78da2`, `b106691` | 一轮独立审查修复后通过；Task 13 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已修正 panic 日志状态与 slug 变更后的旧文章缓存失效 |
 | 14 | 备份、恢复、迁移与管理 CLI | 完成 | `7695e9e`, `5bd3db2`, `69ec676`, `e38ca9e`, `a454f28` | 两轮独立审查修复后通过；Task 14 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已改用 SQLite online backup；恢复前校验 checksum、路径白名单、数据库 quick_check 与迁移版本；强制恢复具备 rollback；备份/恢复限制对齐 |
@@ -83,7 +83,7 @@
 - 管理后台保存体验已修复：非法 slug 会在前端提示并暂停 autosave，不再持续向 `/api/admin/posts/{id}` 发送必然失败的 PUT；slug 表单 `pattern` 已兼容浏览器 `v` flag 并支持中文/Unicode 字母数字；文章编辑器改用已存在分类下拉与标签复选框，避免手填不存在 ID 导致保存 400；不存在的分类、标签或封面媒体引用会由后端返回 `post_validation` 400，不再泄露为 500。
 - E2E 与发布门禁已完成，包含 Playwright 完整写作流、中文 taxonomy slug 浏览器校验、draft/archived 在首页/分类/归档/搜索/RSS/Sitemap 的公开排除验证、桌面/平板/移动响应式重叠/遮挡/裁切断言、可覆盖 `BLOG_E2E_PORT`/`BLOG_E2E_BASE_URL` 的本地测试端口、截图产物、非容器 release gate，以及 Compose fresh-volume restore-smoke 目标。
 - 最终整分支复审修复已完成，包含有界/LRU/代际公共缓存、发布期间编辑锁、公共站点设置/RSS/SEO 消费与缓存失效、分页浏览与搜索、Linux 非 root 可读的 restore-smoke staging volume，以及 fail-fast restore-smoke 检查。
-- 本地 404/图片不显示问题已定位并修复：编辑器不再把粘贴图片保存成 data URL；公开渲染链路保留 `/media/...` 托管图片并继续过滤 data URL；服务端 `/media/*` 路由已有回归测试覆盖；本地旧文章已通过管理 API 修复为已发布中文 slug 与真实媒体链接，公开文章页和图片文件均返回 200。
+- 本地 404/图片不显示问题已定位并修复：编辑器不再把粘贴图片保存成 data URL；公开渲染链路保留 `/media/...` 托管图片并继续过滤 data URL；服务端 `/media/*` 路由已有回归测试覆盖；本地旧文章已通过管理 API 修复为已发布中文 slug 与真实媒体链接；公开文章页和图片文件均返回 200；大小写不同的 percent-encoded 中文 URL 已统一解码为同一个 slug。
 - 工作区仍包含 `.gitignore`、`.idea/`、`.metrics/` 用户改动；从本次起 `docs/progress/` 作为总控文档持续更新。
 
 ## 风险与偏差
@@ -108,6 +108,7 @@
 | R-016 | 中 | 已缓解 | 富文本编辑器需要继续保持后端 Markdown canonical，不应引入 HTML 存储或绕过现有 Markdown 安全渲染链路 | 新编辑器在前端将 h1/h2/h3、段落、加粗、斜体、引用、列表、代码块和图片序列化为 Markdown；图片上传复用 `/api/admin/media` 的 MIME/大小/alt 校验；后端公开渲染链路不变 |
 | R-017 | 低 | 已解决 | 文章和 taxonomy Slug 最初只允许英文数字连字符，中文分类/标签会被浏览器 HTML pattern 直接拦截 | 已统一前端与后端 Slug 规则为 Unicode 字母/数字 + 单连字符；继续拒绝空格、斜杠、连续连字符和首尾连字符，避免公开路由歧义 |
 | R-018 | 中 | 已解决 | 富文本编辑器允许浏览器把粘贴图片以 `data:image/...;base64` 形式塞入正文，媒体库无记录，发布渲染后图片可能被过滤且正文看似空白 | 粘贴/拖入图片文件现在自动调用媒体上传接口并插入 `/media/...`；输入序列化前会移除 data URL 图片并提示使用上传或粘贴图片文件 |
+| R-019 | 中 | 已解决 | 小写 percent-encoded 中文 URL（如 `%e8%bf%99...`）未被统一解码，导致同一中文 slug 大写编码可访问、小写编码 404 | 公开文章/分类/标签路由在查库和生成缓存 key 前统一 `PathUnescape` slug；新增小写编码中文文章访问回归测试 |
 
 ## 变更记录
 
@@ -148,6 +149,8 @@
 | 2026-09-08 15:54 CST | 定位本地 404/空内容问题：当前文章仍是 draft、slug 为空且正文保存了 base64 data URL 图片，媒体库记录为 0；修复富文本编辑器粘贴/拖入图片上传为媒体文件、阻止 data URL 图片保存，并新增标题自动生成中文 Slug，减少手填 slug 漏填导致公开页 404。 |
 | 2026-09-09 09:59 CST | 补齐公开页图片 404 回归：新增渲染器测试确认 `/media/...` 图片保留、`data:image/...` 被过滤，新增服务端媒体路由测试确认配置的 media 目录文件可通过 `/media/*` 访问；本地文章数据将通过管理 API 修复为已发布中文 slug 与真实媒体链接。 |
 | 2026-09-09 10:06 CST | 本地运行态修复完成：使用 Podman 重建 `localhost:18080` 服务并确认 `/healthz=204`、`/readyz=204`、`/admin/=200`；将旧正文 data URL 图片恢复为媒体库文件 `/media/2026/09/bc0d3ffb3839142a1eaf62b68393d26d.png`，保存文章 slug 为 `这是我做的第一个博客系统` 并发布；公开文章页返回 200、HTML 包含媒体图片、媒体文件返回 200 `image/png`。 |
+| 2026-09-09 10:54 CST | 复现用户仍看到 404 的真实路径差异：大写 percent-encoded 中文 URL 返回 200，小写 percent-encoded URL 返回 404；补充失败优先回归测试并修复公开路由 slug 解码，确保 `/posts/%E8...` 与 `/posts/%e8...` 指向同一篇文章。 |
+| 2026-09-09 11:03 CST | 强制重建并重启本地 Podman 服务后，用用户提供的原始小写 percent-encoded URL 验证通过：`/healthz=204`、`/readyz=204`、文章页返回 200、无 404 文案、包含 `第一条博客` 和真实 `/media/...png` 图片链接。 |
 
 ## 下一跟进点
 
