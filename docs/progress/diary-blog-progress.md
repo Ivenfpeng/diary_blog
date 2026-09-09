@@ -12,9 +12,9 @@
 
 当前阶段：发布收尾
 
-总体状态：最终整分支复审已通过；Podman 本地 HTTP-only 容器部署、image-only 部署、编辑器保存回归、Markdown 空白区输入回归、富文本图片上传/粘贴编辑回归、标题自动中文 Slug、中文 Slug 校验与大小写 percent-encoding 公开访问回归验证通过；HTTPS 部署模式待目标环境实测
+总体状态：最终整分支复审已通过；Podman 本地 HTTP-only 容器部署、image-only 部署、编辑器保存回归、Markdown 空白区输入回归、富文本图片上传/粘贴编辑回归、标题自动中文 Slug、中文 Slug 校验、大小写 percent-encoding 公开访问和管理端操作通知/分页滚动回归验证通过；HTTPS 部署模式待目标环境实测
 
-最后登记：2026-09-09 11:03 CST
+最后登记：2026-09-09 13:07 CST
 
 ## 状态定义
 
@@ -48,7 +48,7 @@
 | 7 | 搜索、RSS、Sitemap、SEO | 完成 | `41d236e`, `7646a27`, `39913c5` | 两轮独立审查后通过；配置源地址、Host 污染防护及转义路径测试通过 | - |
 | 8 | 管理员密码、会话与 CSRF | 完成 | `b355547`, `3079e2d`, `4aa0141`, `b8c0977`, `eb6d21b` | 四轮安全复审后通过；Go 全量、race、vet、登录限流与迁移专项测试通过 | 双阶段限流、单管理员、12 小时会话、Cookie/CSRF、密文存储完成 |
 | 9 | 管理文章 API | 完成 | `36d66ad`, `9b413e3` | 一轮独立审查修复后通过；Go 全量、race、vet 与管理 API 契约测试通过 | create/get/list/autosave/preview/publish/archive/revisions/restore 已受会话与 CSRF 保护 |
-| 10 | Vue 后台框架与登录 | 完成 | `2dc1bc6`, `ebc09c8`, `d3d5500` | 独立审查通过；`npm --prefix admin test`、`npm --prefix admin run build` 通过 | 已修正 `/admin` base 路由与匿名 restore 后登录跳转 |
+| 10 | Vue 后台框架与登录 | 完成 | `2dc1bc6`, `ebc09c8`, `d3d5500`, 本次管理端 UX 优化 | 独立审查通过；本次补充全局操作通知栏、主工作区滚动容器、分页记录 flex/横向滚动适配；`npm --prefix admin test`、`npm run test:e2e`、`make build`、`git diff --check` 通过 | 已修正 `/admin` base 路由与匿名 restore 后登录跳转；后台 shell 支持成功/失败通知与固定视口内滚动 |
 | 11 | 文章列表与富文本编辑器 | 完成 | `3b18f87`, `7c8cb32`, `3b9df88`, `7fa87a4`, 本次富文本/图片上传修复 | 两轮独立审查修复后通过；本次补充富文本 DOM 到 Markdown 序列化、编辑器内图片上传/粘贴插入、data URL 图片拦截、标题自动中文 Slug、公开媒体路由回归、中文 URL 大小写 percent-encoding 回归、外层点击聚焦组件测试、中文文章 Slug 校验与 Playwright 空白区输入/图片粘贴 E2E；`npm --prefix admin test`、`npm run test:e2e`、`go test ./...`、`make build`、`git diff --check` 通过 | 已从 CodeMirror Markdown 纯文本编辑升级为内置富文本编辑器；后端仍以 Markdown 为 canonical 存储和发布源；文章 Slug 支持中文/Unicode 字母数字与单连字符 |
 | 12 | 分类、媒体与站点设置 | 完成 | `f857dca`, `2e37bc6`, `0f63e4b`, `d68ed8a`, `7710281`, `5ea64fb` | 四轮独立审查修复后通过；本次补充分类/标签中文 Slug 前后端校验回归；`go test ./...`、`go vet ./...`、`npm --prefix admin test`、`npm --prefix admin run build`、`git diff --check` 通过 | WebP 使用真实解码；AVIF 采用严格结构/属性/extent 校验而非像素级解码；taxonomy Slug 支持中文/Unicode 字母数字与单连字符 |
 | 13 | 日志、健康检查、缓存与停机 | 完成 | `aa78da2`, `b106691` | 一轮独立审查修复后通过；Task 13 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已修正 panic 日志状态与 slug 变更后的旧文章缓存失效 |
@@ -72,7 +72,7 @@
 - 搜索页、RSS、Sitemap 与 SEO 已经通过独立审查并完成。
 - 管理员认证已具备 Argon2id 密码、哈希会话、CSRF 双提交校验、双阶段登录限流与单管理员约束。
 - 管理文章 JSON API 已完成，包含稳定错误 envelope、严格 JSON 解码、2 MiB body 限制、乐观锁冲突映射和显式 admin 路由。
-- Vue 管理后台基础 shell 已完成，包含 typed API client、会话恢复、路由守卫、登录表单、固定侧栏和移动抽屉。
+- Vue 管理后台基础 shell 已完成，包含 typed API client、会话恢复、路由守卫、登录表单、固定侧栏、移动抽屉、全局操作通知栏、固定视口内主内容滚动和统一滚动条样式。
 - 文章列表与富文本编辑器已完成，包含 autosave 串行化、冲突态保护、contenteditable 富文本编辑、DOM 到 Markdown 序列化、编辑器内媒体上传/粘贴/拖入与图片插入、data URL 图片保存拦截、标题自动生成中文 Slug、外层空白区域点击聚焦、全高可编辑区域、预览、发布、归档和版本恢复。
 - 分类、标签、媒体库与站点设置已完成，包含 CSRF 管理端点、SQLite 全局 taxonomy slug trigger、10 MiB 媒体上传边界、WebP 解码校验、AVIF 结构校验、媒体 alt text 更新和管理视图 edit/delete 对话框。
 - 运行期能力已完成，包含 JSON slog、请求 ID、访问日志 status/bytes/route pattern、panic recovery、readyz 存储检查、进程内公开页/RSS/Sitemap 缓存、发布/归档缓存失效和 10 秒优雅停机。
@@ -81,6 +81,8 @@
 - Podman 本地部署验证已完成：`podman-compose` 1.6.0 / Podman 5.8.3，`BLOG_HTTP_PORT=18080`、`BLOG_HTTPS_PORT=18443` 启动成功，`/healthz`、`/readyz`、首页、管理后台入口和容器内备份命令通过。
 - image-only 部署验证已完成：`compose.deploy.yaml` 不包含 `build` 字段，使用 `BLOG_IMAGE=localhost/diary_blog_blog:latest` 直接启动，通过 `/healthz`、`/readyz` 与管理后台资源检查；生产镜像默认指向 `ghcr.io/ivenfpeng/diary_blog:latest`；README 已补充部署机只下载最小 Compose/Caddyfile 配置后执行 `docker compose pull && docker compose up -d` 的路径，并扩展 GHCR、Docker buildx、Podman 单架构/多架构 manifest、Go module proxy build arg、HTTPS、admin 密码、运维命令与排障说明。
 - 管理后台保存体验已修复：非法 slug 会在前端提示并暂停 autosave，不再持续向 `/api/admin/posts/{id}` 发送必然失败的 PUT；slug 表单 `pattern` 已兼容浏览器 `v` flag 并支持中文/Unicode 字母数字；文章编辑器改用已存在分类下拉与标签复选框，避免手填不存在 ID 导致保存 400；不存在的分类、标签或封面媒体引用会由后端返回 `post_validation` 400，不再泄露为 500。
+- 管理后台操作反馈已补强：文章保存/预览/发布/归档/恢复、文章列表创建、分类标签增删改、媒体上传/alt 保存、站点设置保存和加载失败都会进入右上角操作通知栏；通知卡片不拦截页面按钮点击，关闭按钮具备独立无障碍名称。
+- 管理后台记录列表与分页适配已补强：文章记录列表在固定高度内滚动，分页栏使用 flex + 横向滚动容器并显示总记录数，窄屏下不会挤压或裁切按钮。
 - E2E 与发布门禁已完成，包含 Playwright 完整写作流、中文 taxonomy slug 浏览器校验、draft/archived 在首页/分类/归档/搜索/RSS/Sitemap 的公开排除验证、桌面/平板/移动响应式重叠/遮挡/裁切断言、可覆盖 `BLOG_E2E_PORT`/`BLOG_E2E_BASE_URL` 的本地测试端口、截图产物、非容器 release gate，以及 Compose fresh-volume restore-smoke 目标。
 - 最终整分支复审修复已完成，包含有界/LRU/代际公共缓存、发布期间编辑锁、公共站点设置/RSS/SEO 消费与缓存失效、分页浏览与搜索、Linux 非 root 可读的 restore-smoke staging volume，以及 fail-fast restore-smoke 检查。
 - 本地 404/图片不显示问题已定位并修复：编辑器不再把粘贴图片保存成 data URL；公开渲染链路保留 `/media/...` 托管图片并继续过滤 data URL；服务端 `/media/*` 路由已有回归测试覆盖；本地旧文章已通过管理 API 修复为已发布中文 slug 与真实媒体链接；公开文章页和图片文件均返回 200；大小写不同的 percent-encoded 中文 URL 已统一解码为同一个 slug。
@@ -109,6 +111,7 @@
 | R-017 | 低 | 已解决 | 文章和 taxonomy Slug 最初只允许英文数字连字符，中文分类/标签会被浏览器 HTML pattern 直接拦截 | 已统一前端与后端 Slug 规则为 Unicode 字母/数字 + 单连字符；继续拒绝空格、斜杠、连续连字符和首尾连字符，避免公开路由歧义 |
 | R-018 | 中 | 已解决 | 富文本编辑器允许浏览器把粘贴图片以 `data:image/...;base64` 形式塞入正文，媒体库无记录，发布渲染后图片可能被过滤且正文看似空白 | 粘贴/拖入图片文件现在自动调用媒体上传接口并插入 `/media/...`；输入序列化前会移除 data URL 图片并提示使用上传或粘贴图片文件 |
 | R-019 | 中 | 已解决 | 小写 percent-encoded 中文 URL（如 `%e8%bf%99...`）未被统一解码，导致同一中文 slug 大写编码可访问、小写编码 404 | 公开文章/分类/标签路由在查库和生成缓存 key 前统一 `PathUnescape` slug；新增小写编码中文文章访问回归测试 |
+| R-020 | 低 | 已解决 | 管理端新增操作通知后，固定通知卡片可能遮挡右上角操作按钮或让无障碍查询误匹配操作按钮 | 通知卡片本体不拦截 pointer events，仅关闭按钮可点击；关闭按钮统一命名为 `Dismiss notification`，避免匹配 `Publish` 等操作名；E2E 发布流已回归 |
 
 ## 变更记录
 
@@ -151,6 +154,7 @@
 | 2026-09-09 10:06 CST | 本地运行态修复完成：使用 Podman 重建 `localhost:18080` 服务并确认 `/healthz=204`、`/readyz=204`、`/admin/=200`；将旧正文 data URL 图片恢复为媒体库文件 `/media/2026/09/bc0d3ffb3839142a1eaf62b68393d26d.png`，保存文章 slug 为 `这是我做的第一个博客系统` 并发布；公开文章页返回 200、HTML 包含媒体图片、媒体文件返回 200 `image/png`。 |
 | 2026-09-09 10:54 CST | 复现用户仍看到 404 的真实路径差异：大写 percent-encoded 中文 URL 返回 200，小写 percent-encoded URL 返回 404；补充失败优先回归测试并修复公开路由 slug 解码，确保 `/posts/%E8...` 与 `/posts/%e8...` 指向同一篇文章。 |
 | 2026-09-09 11:03 CST | 强制重建并重启本地 Podman 服务后，用用户提供的原始小写 percent-encoded URL 验证通过：`/healthz=204`、`/readyz=204`、文章页返回 200、无 404 文案、包含 `第一条博客` 和真实 `/media/...png` 图片链接。 |
+| 2026-09-09 13:07 CST | 管理端 UX 优化：新增全局操作通知 store 与通知栏，接入文章、分类标签、媒体和设置等主要成功/失败操作；文章列表增加总记录数、分页 flex 自适应和横向滚动容器；管理端主内容改为固定视口内滚动并统一滚动条；通过 Vitest 红绿回归和完整 Playwright E2E 验证。 |
 
 ## 下一跟进点
 

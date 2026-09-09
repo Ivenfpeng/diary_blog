@@ -7,6 +7,7 @@ import PublishPanel from '../components/PublishPanel.vue'
 import RevisionPanel, { type PostRevision } from '../components/RevisionPanel.vue'
 import { apiRequest } from '../api/client'
 import { createEditorState, type EditablePost } from '../state/editor'
+import { notifyError, notifyInfo, notifySuccess } from '../state/notifications'
 import { slugFromTitle, slugPatternSource, slugRegExp, slugValidationMessage } from '../validation/slug'
 
 interface TaxonomyOption { id: number; name: string; slug: string }
@@ -138,24 +139,49 @@ async function load(): Promise<void> {
     tags.value = tagResponse.tags ?? []
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to load this article.'
+    notifyError('Article failed to load', errorMessage.value)
   } finally {
     loading.value = false
   }
 }
 
-async function saveNow(): Promise<void> { await editor.save() }
+async function saveNow(): Promise<void> {
+  if (!editor.dirty.value) {
+    notifyInfo('Article already saved', 'There are no pending changes.')
+    return
+  }
+  await editor.save()
+  if (editor.saveStatus.value === 'saved') {
+    notifySuccess('Article saved', 'The draft changes were stored.')
+  } else if (editor.saveStatus.value === 'conflict') {
+    notifyError('Article save conflict', 'This article changed elsewhere. Reload before saving again.')
+  } else if (editor.saveStatus.value === 'error') {
+    notifyError('Article save failed', clientValidationMessage.value || 'The draft could not be saved.')
+  }
+}
 async function preview(): Promise<void> {
-  const response = await apiRequest<{ html: string }>(`/api/admin/posts/${editor.article.id}/preview`, { method: 'POST', body: { content_md: editor.article.content_md } })
-  editor.previewHTML.value = response.html
+  try {
+    const response = await apiRequest<{ html: string }>(`/api/admin/posts/${editor.article.id}/preview`, { method: 'POST', body: { content_md: editor.article.content_md } })
+    editor.previewHTML.value = response.html
+    notifySuccess('Preview ready', 'Rendered article preview was refreshed.')
+  } catch (error) {
+    notifyError('Preview failed', error instanceof Error ? error.message : 'Unable to render preview.')
+  }
 }
 async function publish(): Promise<void> {
   if (!canPublish.value || destructiveActionInFlight.value) return
   destructiveActionInFlight.value = true
   try {
     if (editor.dirty.value) await editor.save()
-    if (editor.dirty.value || editor.conflict.value) return
+    if (editor.dirty.value || editor.conflict.value) {
+      notifyError('Publish blocked', 'Save the latest draft changes before publishing.')
+      return
+    }
     const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${editor.article.id}/publish`, { method: 'POST', body: { expected_revision: editor.revision.value } })
     editor.load(response.post)
+    notifySuccess('Article published', 'The public site now uses this version.')
+  } catch (error) {
+    notifyError('Publish failed', error instanceof Error ? error.message : 'Unable to publish this article.')
   } finally {
     destructiveActionInFlight.value = false
   }
@@ -166,7 +192,12 @@ async function archive(): Promise<void> {
   destructiveActionInFlight.value = true
   try {
     const response = await apiRequest<{ post: EditablePost }>(`/api/admin/posts/${editor.article.id}/archive`, { method: 'POST', body: { expected_revision: editor.revision.value } })
-    if (!hasLocalChangesSince(snapshot)) editor.load(response.post)
+    if (!hasLocalChangesSince(snapshot)) {
+      editor.load(response.post)
+      notifySuccess('Article archived', 'The article is no longer public.')
+    }
+  } catch (error) {
+    notifyError('Archive failed', error instanceof Error ? error.message : 'Unable to archive this article.')
   } finally {
     destructiveActionInFlight.value = false
   }
@@ -182,7 +213,10 @@ async function restore(revision: PostRevision): Promise<void> {
       editor.load(response.post)
       const revisionResponse = await apiRequest<{ revisions: PostRevision[] }>(`/api/admin/posts/${editor.article.id}/revisions`)
       revisions.value = revisionResponse.revisions ?? []
+      notifySuccess('Revision restored', `Restored revision ${revision.revision}.`)
     }
+  } catch (error) {
+    notifyError('Revision restore failed', error instanceof Error ? error.message : 'Unable to restore this revision.')
   } finally {
     restoring.value = false
     destructiveActionInFlight.value = false

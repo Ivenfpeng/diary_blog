@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { apiRequest } from '../api/client'
+import { notifyError, notifySuccess } from '../state/notifications'
 
 interface Media {
   id: number
@@ -27,6 +28,7 @@ async function load(): Promise<void> {
     altDrafts.value = Object.fromEntries(media.value.map((item) => [item.id, item.alt_text]))
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to load media.'
+    notifyError('Media failed to load', errorMessage.value)
   }
 }
 
@@ -41,10 +43,12 @@ async function upload(): Promise<void> {
   statusMessage.value = ''
   if (!selectedFile.value) {
     errorMessage.value = 'Choose an image to upload.'
+    notifyError('Image upload failed', errorMessage.value)
     return
   }
   if (!altText.value.trim()) {
     errorMessage.value = 'Alt text is required.'
+    notifyError('Image upload failed', errorMessage.value)
     return
   }
   const body = new FormData()
@@ -58,9 +62,11 @@ async function upload(): Promise<void> {
     altDrafts.value[response.media.id] = response.media.alt_text
     altText.value = ''
     statusMessage.value = 'Upload complete.'
+    notifySuccess('Image uploaded', `${response.media.alt_text} is now available in the media library.`)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Upload failed'
     statusMessage.value = ''
+    notifyError('Image upload failed', errorMessage.value)
   } finally {
     uploading.value = false
   }
@@ -70,6 +76,7 @@ async function saveAltText(item: Media): Promise<void> {
   const nextAltText = (altDrafts.value[item.id] ?? '').trim()
   if (!nextAltText) {
     errorMessage.value = 'Alt text is required.'
+    notifyError('Alt text save failed', errorMessage.value)
     return
   }
   savingAltID.value = item.id
@@ -82,8 +89,10 @@ async function saveAltText(item: Media): Promise<void> {
     const index = media.value.findIndex((entry) => entry.id === item.id)
     if (index >= 0) media.value[index] = response.media
     altDrafts.value[item.id] = response.media.alt_text
+    notifySuccess('Alt text saved', 'The media description was updated.')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to save alt text.'
+    notifyError('Alt text save failed', errorMessage.value)
   } finally {
     savingAltID.value = null
   }

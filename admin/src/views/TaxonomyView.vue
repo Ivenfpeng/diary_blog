@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { apiRequest } from '../api/client'
+import { notifyError, notifySuccess } from '../state/notifications'
 import { slugPatternSource } from '../validation/slug'
 
 type TaxonomyKind = 'categories' | 'tags'
@@ -41,6 +42,7 @@ async function load(): Promise<void> {
     tags.value = tagResponse.tags
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to load taxonomy.'
+    notifyError('Taxonomy failed to load', errorMessage.value)
   }
 }
 
@@ -54,10 +56,12 @@ async function create(): Promise<void> {
       },
     )
     collection(kind.value).value.push(response[singular(kind.value)])
+    notifySuccess(`${singular(kind.value)[0].toUpperCase()}${singular(kind.value).slice(1)} added`, `${name.value} is ready to use.`)
     name.value = ''
     slug.value = ''
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to save taxonomy.'
+    notifyError('Taxonomy save failed', errorMessage.value)
   }
 }
 
@@ -82,8 +86,10 @@ async function saveEdit(): Promise<void> {
     const index = values.findIndex((item) => item.id === current.id)
     if (index >= 0) values[index] = response[singular(current.kind)]
     editing.value = null
+    notifySuccess(`${singular(current.kind)[0].toUpperCase()}${singular(current.kind).slice(1)} updated`, `${current.name} was updated.`)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to update taxonomy.'
+    notifyError('Taxonomy update failed', errorMessage.value)
   }
 }
 
@@ -100,8 +106,10 @@ async function confirmDelete(): Promise<void> {
       (item) => item.id !== current.id,
     )
     deleting.value = null
+    notifySuccess(`${singular(current.kind)[0].toUpperCase()}${singular(current.kind).slice(1)} deleted`, `${current.name} was removed.`)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to delete taxonomy.'
+    notifyError('Taxonomy delete failed', errorMessage.value)
   }
 }
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { apiRequest } from '../api/client'
+import { notifyError, notifySuccess } from '../state/notifications'
 
 interface Settings {
   site_title: string
@@ -22,6 +23,7 @@ async function load(): Promise<void> {
     settings.value = { ...settings.value, ...(await apiRequest<{ settings: Settings }>('/api/admin/settings')).settings }
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to load settings.'
+    notifyError('Settings failed to load', errorMessage.value)
   }
 }
 async function save(): Promise<void> {
@@ -31,8 +33,10 @@ async function save(): Promise<void> {
     const response = await apiRequest<{ settings: Settings }>('/api/admin/settings', { method: 'PUT', body: settings.value })
     settings.value = { ...settings.value, ...response.settings }
     saved.value = true
+    notifySuccess('Settings saved', 'Site settings are ready for visitors.')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to save settings.'
+    notifyError('Settings save failed', errorMessage.value)
   }
 }
 onMounted(load)

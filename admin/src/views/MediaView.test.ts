@@ -2,11 +2,15 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import MediaView from './MediaView.vue'
 import { apiRequest } from '../api/client'
+import { clearNotifications, notifications } from '../state/notifications'
 
 vi.mock('../api/client', () => ({ apiRequest: vi.fn() }))
 
 describe('MediaView', () => {
-  beforeEach(() => vi.mocked(apiRequest).mockReset())
+  beforeEach(() => {
+    vi.mocked(apiRequest).mockReset()
+    clearNotifications()
+  })
 
   it('requires alt text before uploading and reports upload progress', async () => {
     vi.mocked(apiRequest).mockResolvedValueOnce({ media: [] }).mockResolvedValueOnce({ media: { id: 1, path: '2026/09/photo.png', alt_text: 'Photo' } })
@@ -22,6 +26,7 @@ describe('MediaView', () => {
     await flushPromises()
     expect(apiRequest).toHaveBeenCalledWith('/api/admin/media', expect.objectContaining({ method: 'POST' }))
     expect(wrapper.text()).toContain('Upload complete')
+    expect(notifications.value.at(-1)).toMatchObject({ type: 'success', title: 'Image uploaded', message: 'Photo is now available in the media library.' })
   })
 
   it('keeps the selected file so a failed upload can be retried', async () => {
@@ -35,6 +40,7 @@ describe('MediaView', () => {
     await wrapper.get('form').trigger('submit.prevent')
     await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toBe('Upload failed')
+    expect(notifications.value.at(-1)).toMatchObject({ type: 'error', title: 'Image upload failed', message: 'Upload failed' })
     expect((wrapper.get('#media-file').element as HTMLInputElement).files?.[0]?.name).toBe('photo.png')
   })
 
@@ -49,5 +55,6 @@ describe('MediaView', () => {
     await flushPromises()
     expect(apiRequest).toHaveBeenLastCalledWith('/api/admin/media/7', { method: 'PATCH', body: { alt_text: 'New text' } })
     expect(wrapper.text()).toContain('New text')
+    expect(notifications.value.at(-1)).toMatchObject({ type: 'success', title: 'Alt text saved' })
   })
 })

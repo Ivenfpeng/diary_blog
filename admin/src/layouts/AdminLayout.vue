@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { FileText, FolderTree, Image, LayoutDashboard, Menu, Settings, X } from '@lucide/vue'
 import IconButton from '../components/IconButton.vue'
+import NotificationTray from '../components/NotificationTray.vue'
 import { session } from '../state/session'
 
 const navigationOpen = ref(false)
@@ -35,6 +36,7 @@ const closeNavigation = () => { navigationOpen.value = false }
       <main class="admin-content">
         <RouterView />
       </main>
+      <NotificationTray />
     </div>
   </div>
 </template>

@@ -4,6 +4,7 @@ import { FilePlus, Search } from '@lucide/vue'
 import { useRouter } from 'vue-router'
 import { apiRequest } from '../api/client'
 import type { EditablePost } from '../state/editor'
+import { notifyError, notifySuccess } from '../state/notifications'
 
 interface PostListResponse { posts: EditablePost[]; total: number; page: number; page_size: number }
 
@@ -30,17 +31,25 @@ async function loadPosts(): Promise<void> {
     total.value = response.total
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Unable to load articles.'
+    notifyError('Articles failed to load', errorMessage.value)
   } finally {
     loading.value = false
   }
 }
 
 async function createPost(): Promise<void> {
-  const response = await apiRequest<{ post: EditablePost }>('/api/admin/posts', {
-    method: 'POST',
-    body: { slug: '', title: '', summary: '', content_md: '', category_id: null, tag_ids: [] },
-  })
-  await router.push({ name: 'post-edit', params: { id: response.post.id } })
+  try {
+    const response = await apiRequest<{ post: EditablePost }>('/api/admin/posts', {
+      method: 'POST',
+      body: { slug: '', title: '', summary: '', content_md: '', category_id: null, tag_ids: [] },
+    })
+    notifySuccess('Draft created', 'A new article is ready to edit.')
+    await router.push({ name: 'post-edit', params: { id: response.post.id } })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to create article.'
+    errorMessage.value = message
+    notifyError('Draft creation failed', message)
+  }
 }
 
 function search(): void {
@@ -69,24 +78,27 @@ onMounted(loadPosts)
     </form>
     <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
     <p v-else-if="loading" class="muted">Loading articles…</p>
-    <div v-else class="post-list">
+    <div v-else class="post-list" aria-label="Article records">
       <RouterLink v-for="post in posts" :key="post.id" :to="{ name: 'post-edit', params: { id: post.id } }" class="post-row">
         <span><strong>{{ post.title || 'Untitled article' }}</strong><small>{{ post.summary || post.slug || 'No summary' }}</small></span>
         <span class="post-meta">{{ post.status }} · v{{ post.revision }}</span>
       </RouterLink>
       <p v-if="!posts.length" class="muted">No articles match these filters.</p>
     </div>
-    <nav class="pagination" aria-label="Posts pagination">
-      <button type="button" class="secondary-button" :disabled="page === 1 || loading" @click="goToPage(page - 1)">Previous</button>
-      <span>Page {{ page }} of {{ pageCount }}</span>
-      <button type="button" class="secondary-button" :disabled="page === pageCount || loading" @click="goToPage(page + 1)">Next</button>
+    <nav class="pagination-card" aria-label="Posts pagination">
+      <div class="pagination-strip">
+        <span class="pagination-total">{{ total }} records</span>
+        <button type="button" class="secondary-button" :disabled="page === 1 || loading" @click="goToPage(page - 1)">Previous</button>
+        <span class="pagination-current">Page {{ page }} of {{ pageCount }}</span>
+        <button type="button" class="secondary-button" :disabled="page === pageCount || loading" @click="goToPage(page + 1)">Next</button>
+      </div>
     </nav>
   </section>
 </template>
 
 <style scoped>
 .posts-view { width: 100%; display: grid; gap: 18px; }
-.view-heading, .post-filters, .pagination { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.view-heading, .post-filters { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
 .view-heading { justify-content: space-between; }
 h1 { margin: 0; font-size: clamp(30px, 3vw, 44px); letter-spacing: -.045em; }
 .create-button, .secondary-button { min-height: 42px; display: inline-flex; align-items: center; gap: 7px; padding: 0 14px; border-radius: 13px; font: inherit; font-weight: 750; cursor: pointer; }
@@ -96,13 +108,19 @@ h1 { margin: 0; font-size: clamp(30px, 3vw, 44px); letter-spacing: -.045em; }
 label { display: grid; gap: 5px; color: #39463e; font-size: 13px; font-weight: 650; }
 input, select { min-height: 44px; border: 1px solid #b9c5be; border-radius: 12px; padding: 0 12px; font: inherit; background: #fff; }
 .search-field { min-width: min(100%, 360px); flex: 1; }
-.post-list { overflow: hidden; border: 1px solid rgb(202 215 205 / 80%); border-radius: 24px; background: var(--admin-panel-strong); box-shadow: var(--admin-shadow); }
+.post-list { max-height: min(62vh, 720px); overflow: auto; border: 1px solid rgb(202 215 205 / 80%); border-radius: 24px; background: var(--admin-panel-strong); box-shadow: var(--admin-shadow); scrollbar-gutter: stable; }
 .post-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border-top: 1px solid #edf0ee; color: inherit; text-decoration: none; transition: background .16s ease, transform .16s ease; }
 .post-row:first-child { border-top: 0; }
 .post-row:hover { background: #f4f7f5; transform: translateX(2px); }
 small { display: block; margin-top: 4px; color: #68756d; }
 .post-meta, .muted { color: #68756d; font-size: 13px; }
-.pagination { justify-content: flex-end; padding-top: 2px; }
+.pagination-card { max-width: 100%; overflow-x: auto; padding: 10px 12px; border: 1px solid rgb(202 215 205 / 72%); border-radius: 18px; background: rgb(255 255 252 / 68%); scrollbar-gutter: stable; }
+.pagination-strip { display: flex; width: max-content; min-width: 100%; align-items: center; justify-content: flex-end; gap: 12px; }
+.pagination-total { margin-right: auto; color: #68756d; font-size: 13px; }
+.pagination-current { white-space: nowrap; color: #33443b; font-size: 13px; font-weight: 750; }
 button:disabled { opacity: .55; cursor: not-allowed; }
-@media (max-width: 600px) { .post-row { align-items: flex-start; flex-direction: column; gap: 5px; } .pagination { justify-content: space-between; } }
+@media (max-width: 600px) {
+  .post-row { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .pagination-strip { justify-content: flex-start; }
+}
 </style>

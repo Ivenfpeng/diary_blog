@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PostEditorView from './PostEditorView.vue'
+import { clearNotifications, notifications } from '../state/notifications'
 
 const mockedClient = vi.hoisted(() => ({ apiRequest: vi.fn() }))
 vi.mock('../api/client', () => mockedClient)
@@ -16,7 +17,10 @@ function deferred<T>() {
 }
 
 describe('PostEditorView', () => {
-  beforeEach(() => mockedClient.apiRequest.mockReset())
+  beforeEach(() => {
+    mockedClient.apiRequest.mockReset()
+    clearNotifications()
+  })
   afterEach(() => vi.useRealTimers())
 
   it('uses a browser-compatible slug pattern', async () => {
@@ -90,7 +94,62 @@ describe('PostEditorView', () => {
         body: expect.objectContaining({ category_id: 2, tag_ids: [3] }),
       }))
     })
+    expect(notifications.value.at(-1)).toMatchObject({ type: 'success', title: 'Article saved' })
     wrapper.unmount()
+  })
+
+  it('adds operation notifications for publish success and failure', async () => {
+    const post = {
+      id: 7, slug: 'valid-slug', title: 'Ready to publish', summary: '', content_md: '# Ready', status: 'draft',
+      category_id: null, tag_ids: [], revision: 3,
+    }
+    mockedClient.apiRequest.mockImplementation((path = '') => {
+      if (path === '/api/admin/posts/7/publish') return Promise.resolve({ post: { ...post, status: 'published', revision: 4 } })
+      if (path.endsWith('/revisions')) return Promise.resolve({ revisions: [] })
+      return Promise.resolve({ post })
+    })
+    const PublishPanelStub = {
+      name: 'PublishPanel',
+      props: ['canPublish'],
+      emits: ['publish'],
+      template: '<button name="publish" :disabled="!canPublish" @click="$emit(\'publish\')">Publish</button>',
+    }
+    const wrapper = mount(PostEditorView, {
+      global: {
+        stubs: {
+          RouterLink: { template: '<a><slot /></a>' },
+          MarkdownEditor: { props: ['modelValue'], template: '<textarea data-testid="markdown-editor" />' },
+          PublishPanel: PublishPanelStub,
+          RevisionPanel: true,
+        },
+      },
+    })
+    await vi.waitFor(() => expect(wrapper.find('.editor-form').exists()).toBe(true))
+
+    wrapper.findComponent(PublishPanelStub).vm.$emit('publish')
+    await vi.waitFor(() => expect(notifications.value.at(-1)).toMatchObject({ type: 'success', title: 'Article published' }))
+    wrapper.unmount()
+
+    clearNotifications()
+    mockedClient.apiRequest.mockImplementation((path = '') => {
+      if (path === '/api/admin/posts/7/publish') return Promise.reject(new Error('Publish rejected'))
+      if (path.endsWith('/revisions')) return Promise.resolve({ revisions: [] })
+      return Promise.resolve({ post })
+    })
+    const failing = mount(PostEditorView, {
+      global: {
+        stubs: {
+          RouterLink: { template: '<a><slot /></a>' },
+          MarkdownEditor: { props: ['modelValue'], template: '<textarea data-testid="markdown-editor" />' },
+          PublishPanel: PublishPanelStub,
+          RevisionPanel: true,
+        },
+      },
+    })
+    await vi.waitFor(() => expect(failing.find('.editor-form').exists()).toBe(true))
+    failing.findComponent(PublishPanelStub).vm.$emit('publish')
+    await vi.waitFor(() => expect(notifications.value.at(-1)).toMatchObject({ type: 'error', title: 'Publish failed', message: 'Publish rejected' }))
+    failing.unmount()
   })
 
   it('keeps publish unavailable until a valid saved article is ready', async () => {

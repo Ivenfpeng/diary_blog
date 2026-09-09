@@ -2,11 +2,15 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TaxonomyView from './TaxonomyView.vue'
 import { apiRequest } from '../api/client'
+import { clearNotifications, notifications } from '../state/notifications'
 
 vi.mock('../api/client', () => ({ apiRequest: vi.fn() }))
 
 describe('TaxonomyView', () => {
-  beforeEach(() => vi.mocked(apiRequest).mockReset())
+  beforeEach(() => {
+    vi.mocked(apiRequest).mockReset()
+    clearNotifications()
+  })
 
   it('uses a browser-compatible slug pattern', async () => {
     vi.mocked(apiRequest)
@@ -45,6 +49,7 @@ describe('TaxonomyView', () => {
       body: { name: '事实上', slug: '事实-2026' },
     })
     expect(wrapper.text()).toContain('/事实-2026')
+    expect(notifications.value.at(-1)).toMatchObject({ type: 'success', title: 'Category added' })
   })
 
   it('edits and deletes a category', async () => {
@@ -66,5 +71,6 @@ describe('TaxonomyView', () => {
     await flushPromises()
     expect(apiRequest).toHaveBeenLastCalledWith('/api/admin/categories/2', { method: 'DELETE' })
     expect(wrapper.text()).not.toContain('Platform')
+    expect(notifications.value.at(-1)).toMatchObject({ type: 'success', title: 'Category deleted' })
   })
 })
