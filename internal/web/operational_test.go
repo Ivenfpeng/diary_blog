@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -70,5 +72,26 @@ func TestAccessLogOmitsCookies(t *testing.T) {
 
 	if strings.Contains(output.String(), "secret") || strings.Contains(output.String(), "Cookie") {
 		t.Fatalf("access log leaked cookie: %s", output.String())
+	}
+}
+
+func TestMediaRouteServesFilesFromConfiguredMediaDirectory(t *testing.T) {
+	mediaDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(mediaDir, "2026", "09"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mediaDir, "2026", "09", "photo.png"), []byte("png bytes"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewServer(nil, ServerOptions{MediaDir: mediaDir})
+	recorder := httptest.NewRecorder()
+
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/media/2026/09/photo.png", nil))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("media status = %d, want %d", recorder.Code, http.StatusOK)
+	}
+	if recorder.Body.String() != "png bytes" {
+		t.Fatalf("media body = %q", recorder.Body.String())
 	}
 }

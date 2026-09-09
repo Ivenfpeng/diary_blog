@@ -162,7 +162,11 @@ keep this stack in HTTP-only mode and set `BLOG_PUBLIC_URL` to the external
 
 The admin console stores article body content as Markdown. Its built-in rich
 text editor serializes headings, paragraphs, emphasis, quotes, lists, code
-blocks, and uploaded images back to Markdown before saving.
+blocks, and uploaded images back to Markdown before saving. Use the editor's
+image button, paste an image file, or drag an image file into the editor; images
+are uploaded to the media library and inserted as `/media/...` Markdown links.
+Embedded `data:image/...` URLs are blocked so large base64 images are not saved
+into posts.
 
 Article, category, and tag slugs support Unicode letters, Unicode numbers, and
 single hyphens. Chinese slugs are valid, for example:
@@ -177,6 +181,10 @@ This keeps public routes unambiguous: `/posts/数据库-笔记-2026` is valid, w
 `/posts/数据库/笔记` would be interpreted as multiple path segments. Some tools
 may display copied Chinese URLs as percent-encoded text; that is normal HTTP URL
 encoding.
+
+When a new article has no manual slug yet, the admin editor generates one from
+the title automatically. Editing the slug field turns off title-based updates
+for that article session.
 
 ## GHCR image notes
 

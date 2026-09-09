@@ -159,6 +159,35 @@ describe('PostEditorView', () => {
     wrapper.unmount()
   })
 
+  it('generates a Chinese slug from the title until the slug is manually edited', async () => {
+    mockedClient.apiRequest.mockResolvedValue({
+      post: {
+        id: 7, slug: '', title: '', summary: '', content_md: '', status: 'draft',
+        category_id: null, tag_ids: [], revision: 3,
+      },
+    })
+
+    const wrapper = mount(PostEditorView, {
+      global: {
+        stubs: {
+          RouterLink: { template: '<a><slot /></a>' },
+          MarkdownEditor: { props: ['modelValue'], emits: ['update:modelValue'], template: '<textarea data-testid="markdown-editor" />' },
+          PublishPanel: { props: ['canPublish'], template: '<button name="publish" :disabled="!canPublish">Publish</button>' },
+          RevisionPanel: true,
+        },
+      },
+    })
+    await vi.waitFor(() => expect(wrapper.find('.editor-form').exists()).toBe(true))
+
+    await wrapper.get('#title').setValue('这是我做的第一个博客系统！')
+    expect((wrapper.get('#slug').element as HTMLInputElement).value).toBe('这是我做的第一个博客系统')
+
+    await wrapper.get('#slug').setValue('custom-slug')
+    await wrapper.get('#title').setValue('标题再次变化')
+    expect((wrapper.get('#slug').element as HTMLInputElement).value).toBe('custom-slug')
+    wrapper.unmount()
+  })
+
   it('keeps publishing disabled for slugs rejected by the server', async () => {
     mockedClient.apiRequest.mockResolvedValue({
       post: {

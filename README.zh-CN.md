@@ -181,6 +181,8 @@ docker compose -f compose.deploy.yaml -f compose.https-files.yaml up -d
 
 管理后台文章正文使用内置富文本编辑器，保存前会把标题、段落、加粗、斜体、引用、列表、代码块和上传图片序列化回 Markdown。后端仍以 Markdown 作为 canonical 内容源，再通过统一渲染链路发布为 HTML。
 
+图片建议通过编辑器工具栏的 Image 按钮上传，也可以直接粘贴图片文件或拖入图片文件；编辑器会复用媒体库上传接口，并插入 `/media/...` Markdown 图片链接。不要把 `data:image/...;base64,...` 这类超长 data URL 存进文章；编辑器会主动拦截这种内容，避免发布后图片被安全渲染链路过滤、页面看起来空白。
+
 文章、分类、标签的 Slug 现在支持 Unicode 字母、Unicode 数字和单个连字符，因此中文 Slug 可以直接使用，例如：
 
 ```text
@@ -196,6 +198,8 @@ docker compose -f compose.deploy.yaml -f compose.https-files.yaml up -d
 - 开头或结尾连字符：`-my-post`、`my-post-`
 
 原因是 Slug 会进入公开 URL。`/posts/数据库-笔记-2026` 是一个清晰的文章路径；如果允许 `/`，`/posts/数据库/笔记` 会被路由识别成多级路径。复制中文 URL 时，某些终端、curl 或日志里可能显示成 `%E6%95%B0...` 这种百分号编码，这是正常的 URL 编码。
+
+新文章如果还没有手动填写 Slug，后台会根据标题自动生成一个中文可用的 Slug，例如标题 `这是我做的第一个博客系统！` 会生成 `这是我做的第一个博客系统`。一旦你手动编辑过 Slug，本次编辑会尊重手动值，不再随标题自动覆盖。
 
 ## 镜像发布与 GHCR 注意事项
 

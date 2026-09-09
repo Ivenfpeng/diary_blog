@@ -21,6 +21,19 @@ const uploading = ref(false)
 let syncingFromParent = false
 
 const editorLabel = computed(() => props.disabled ? 'Rich text editor disabled' : 'Rich text editor')
+const dataURLImageMessage = 'Use image upload or paste an image file; embedded data URL images are not saved.'
+
+interface TransferItemLike {
+  kind?: string
+  type?: string
+  getAsFile?: () => File | null
+}
+
+interface TransferLike {
+  items?: ArrayLike<TransferItemLike> | null
+  files?: ArrayLike<File> | null
+  getData?: (format: string) => string
+}
 
 function escapeHTML(value: string): string {
   return value
@@ -32,6 +45,10 @@ function escapeHTML(value: string): string {
 
 function escapeAttribute(value: string): string {
   return escapeHTML(value).replaceAll("'", '&#39;')
+}
+
+function isDataImageSource(value: string): boolean {
+  return /^data:image\//i.test(value)
 }
 
 function inlineMarkdownToHTML(value: string): string {
@@ -187,6 +204,23 @@ function htmlToMarkdown(element: HTMLElement): string {
   return markdown || normalizeWhitespace(element.textContent ?? '')
 }
 
+function removeDataURLImages(): boolean {
+  if (!surface.value) return false
+  let removed = false
+  for (const image of Array.from(surface.value.querySelectorAll('img'))) {
+    if (!isDataImageSource(image.getAttribute('src') ?? '')) continue
+    const figure = image.closest('figure')
+    if (figure && surface.value.contains(figure)) {
+      figure.remove()
+    } else {
+      image.remove()
+    }
+    removed = true
+  }
+  if (removed) uploadError.value = dataURLImageMessage
+  return removed
+}
+
 function syncSurfaceFromMarkdown(markdown: string): void {
   if (!surface.value) return
   syncingFromParent = true
@@ -196,6 +230,7 @@ function syncSurfaceFromMarkdown(markdown: string): void {
 
 function emitCurrentMarkdown(): void {
   if (!surface.value || syncingFromParent) return
+  removeDataURLImages()
   emit('update:modelValue', htmlToMarkdown(surface.value))
 }
 
@@ -250,13 +285,9 @@ function filenameAlt(file: File): string {
   return file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim() || 'Uploaded image'
 }
 
-async function uploadSelectedImage(event: Event): Promise<void> {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
+async function insertImageFile(file: File): Promise<void> {
   if (!props.uploadImage) {
     uploadError.value = 'Image upload is not available in this editor.'
-    input.value = ''
     return
   }
   uploadError.value = ''
@@ -280,8 +311,59 @@ async function uploadSelectedImage(event: Event): Promise<void> {
     uploadError.value = error instanceof Error ? error.message : 'Image upload failed.'
   } finally {
     uploading.value = false
+  }
+}
+
+async function uploadSelectedImage(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  try {
+    await insertImageFile(file)
+  } finally {
     input.value = ''
   }
+}
+
+function firstImageFile(transfer: TransferLike | null | undefined): File | null {
+  if (!transfer) return null
+  for (const item of Array.from(transfer.items ?? [])) {
+    if (item.kind === 'file' && item.type?.startsWith('image/')) {
+      const file = item.getAsFile?.()
+      if (file) return file
+    }
+  }
+  for (const file of Array.from(transfer.files ?? [])) {
+    if (file.type.startsWith('image/')) return file
+  }
+  return null
+}
+
+function containsDataURLImage(transfer: TransferLike | null | undefined): boolean {
+  if (!transfer?.getData) return false
+  return isDataImageSource(transfer.getData('text/plain')) || /<img\b[^>]+src=["']data:image\//i.test(transfer.getData('text/html'))
+}
+
+async function handlePaste(event: ClipboardEvent): Promise<void> {
+  if (props.disabled || uploading.value) return
+  const file = firstImageFile(event.clipboardData)
+  if (file) {
+    event.preventDefault()
+    await insertImageFile(file)
+    return
+  }
+  if (containsDataURLImage(event.clipboardData)) {
+    event.preventDefault()
+    uploadError.value = dataURLImageMessage
+  }
+}
+
+async function handleDrop(event: DragEvent): Promise<void> {
+  if (props.disabled || uploading.value) return
+  const file = firstImageFile(event.dataTransfer)
+  if (!file) return
+  event.preventDefault()
+  await insertImageFile(file)
 }
 
 watch(() => props.modelValue, (value) => {
@@ -316,6 +398,9 @@ onMounted(() => syncSurfaceFromMarkdown(props.modelValue))
       :contenteditable="!disabled"
       @input="emitCurrentMarkdown"
       @blur="emitCurrentMarkdown"
+      @paste="handlePaste"
+      @dragover.prevent
+      @drop="handleDrop"
     />
     <p v-if="uploadError" class="rich-editor-error" role="alert">{{ uploadError }}</p>
   </div>

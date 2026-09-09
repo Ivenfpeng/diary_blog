@@ -55,15 +55,17 @@ test('administrator can type Markdown after clicking the blank editor area', asy
 
   await page.getByRole('link', { name: 'Posts' }).click()
   await page.getByRole('button', { name: 'New post' }).click()
-  await page.locator('#title').fill('Blank area Markdown input')
-  await page.locator('#slug').fill('blank-area-markdown-input')
+  await page.locator('#title').fill('空白区域 Markdown 输入！')
+  await expect(page.locator('#slug')).toHaveValue('空白区域-markdown-输入')
 
   await clickMarkdownBlankArea(page, page.locator('.rich-editor-surface'))
   await page.keyboard.insertText('# Typed from blank area\n\nThe editor should accept input here.')
-  await page.locator('#rich-editor-image-upload').setInputFiles({
-    name: 'inline-editor.png',
-    mimeType: 'image/png',
-    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL2VwAAAABJRU5ErkJggg==', 'base64'),
+  await page.evaluate(() => {
+    const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL2VwAAAABJRU5ErkJggg=='), (character) => character.charCodeAt(0))
+    const data = new DataTransfer()
+    data.items.add(new File([bytes], 'inline-editor.png', { type: 'image/png' }))
+    const event = new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })
+    document.querySelector('.rich-editor-surface')?.dispatchEvent(event)
   })
 
   await expect(page.locator('.rich-editor-surface')).toContainText('Typed from blank area')

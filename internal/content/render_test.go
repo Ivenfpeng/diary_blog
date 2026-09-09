@@ -49,6 +49,23 @@ func TestRendererHighlightsCodeAndRemovesUnsafeHTML(t *testing.T) {
 	}
 }
 
+func TestRendererPreservesHostedImagesAndRemovesDataURLImages(t *testing.T) {
+	renderer := NewRenderer()
+	markdown := "![Uploaded image](/media/2026/09/photo.png)\n\n![Inline image](data:image/png;base64,abc)"
+
+	result, err := renderer.Render(markdown)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(result.HTML, `<img src="/media/2026/09/photo.png" alt="Uploaded image"`) {
+		t.Fatalf("hosted media image was not preserved: %s", result.HTML)
+	}
+	if strings.Contains(result.HTML, "data:image") {
+		t.Fatalf("data URL image leaked into rendered HTML: %s", result.HTML)
+	}
+}
+
 func TestRendererCalculatesReadingTimeFromPlainText(t *testing.T) {
 	renderer := NewRenderer()
 	markdown := strings.Repeat("字", 501)

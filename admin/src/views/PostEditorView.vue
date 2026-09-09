@@ -7,7 +7,7 @@ import PublishPanel from '../components/PublishPanel.vue'
 import RevisionPanel, { type PostRevision } from '../components/RevisionPanel.vue'
 import { apiRequest } from '../api/client'
 import { createEditorState, type EditablePost } from '../state/editor'
-import { slugPatternSource, slugRegExp, slugValidationMessage } from '../validation/slug'
+import { slugFromTitle, slugPatternSource, slugRegExp, slugValidationMessage } from '../validation/slug'
 
 interface TaxonomyOption { id: number; name: string; slug: string }
 interface UploadedMedia { path: string; alt_text: string }
@@ -21,6 +21,7 @@ const loading = ref(true)
 const restoring = ref(false)
 const destructiveActionInFlight = ref(false)
 const errorMessage = ref('')
+const slugManuallyEdited = ref(false)
 const postID = computed(() => Number(route.params.id))
 const maxContentBytes = 2 * 1024 * 1024
 const textEncoder = new TextEncoder()
@@ -66,6 +67,17 @@ const saveLabel = computed(() => ({ idle: editor.dirty.value ? 'Unsaved changes'
 
 function updateField(field: 'title' | 'slug' | 'summary' | 'content_md', value: string): void {
   if (destructiveActionInFlight.value) return
+  if (field === 'slug') {
+    slugManuallyEdited.value = true
+    editor.update({ slug: value })
+    return
+  }
+  if (field === 'title') {
+    const previousGeneratedSlug = slugFromTitle(editor.article.title)
+    const shouldUpdateSlug = !slugManuallyEdited.value && (!editor.article.slug || editor.article.slug === previousGeneratedSlug)
+    editor.update(shouldUpdateSlug ? { title: value, slug: slugFromTitle(value) } : { title: value })
+    return
+  }
   editor.update({ [field]: value })
 }
 
@@ -117,6 +129,10 @@ async function load(): Promise<void> {
       apiRequest<{ tags: TaxonomyOption[] }>('/api/admin/tags'),
     ])
     editor.load(postResponse.post)
+    slugManuallyEdited.value = Boolean(postResponse.post.slug)
+    if (!postResponse.post.slug && postResponse.post.title) {
+      editor.update({ slug: slugFromTitle(postResponse.post.title) })
+    }
     revisions.value = revisionResponse.revisions ?? []
     categories.value = categoryResponse.categories ?? []
     tags.value = tagResponse.tags ?? []
