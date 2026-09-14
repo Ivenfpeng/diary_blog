@@ -1,0 +1,36 @@
+{
+  "timestamp": "2026-09-05T01:44:34.479Z",
+  "scope": "daily-2026-09-05",
+  "period": {
+    "start": "2026-09-05",
+    "end": "2026-09-05",
+    "days": 1
+  },
+  "commitStats": {
+    "totalCommits": 0,
+    "aiCommits": 0,
+    "humanCommits": 0,
+    "totalInsertions": 0,
+    "totalDeletions": 0,
+    "netChange": 0,
+    "authors": {},
+    "byDate": {},
+    "aiCommitRatio": 0
+  },
+  "codeSpeed": {
+    "totalInsertions": 0,
+    "totalDeletions": 0,
+    "netChange": 0,
+    "hours": 23.99972222222222,
+    "speedPerHour": 0,
+    "aiCommits": 0,
+    "humanCommits": 0,
+    "aiCommitRatio": 0
+  },
+  "summary": {
+    "aiCodeRatio": 0,
+    "commitFrequency": 0,
+    "codeGenerationSpeed": 0,
+    "aiCommitRatio": 0
+  }
+}

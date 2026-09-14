@@ -26,6 +26,9 @@ go.work.sum
 
 # env file
 .env
+.superpowers
+.logs
+*.log
 
 # Editor/IDE
 # .idea/

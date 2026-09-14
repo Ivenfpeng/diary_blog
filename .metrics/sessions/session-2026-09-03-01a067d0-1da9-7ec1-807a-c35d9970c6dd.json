@@ -1,0 +1,31 @@
+{
+  "sessionId": "01a067d0-1da9-7ec1-807a-c35d9970c6dd",
+  "date": "2026-09-03",
+  "startTime": "2026-09-03T15:08:12.126Z",
+  "endTime": null,
+  "transcriptPath": "/Users/iven/.codex/sessions/2026/09/03/rollout-2026-09-03T23-08-07-01a067d0-1da9-7ec1-807a-c35d9970c6dd.jsonl",
+  "cwd": "/Users/iven/work/program/diary_blog",
+  "source": "codex-hook",
+  "prompts": [
+    {
+      "timestamp": "2026-09-03T15:08:12.205Z",
+      "prompt": "upgrade",
+      "length": 7
+    }
+  ],
+  "toolCalls": [],
+  "skillCalls": [],
+  "slashCommands": [],
+  "subagentCalls": [],
+  "tasks": [],
+  "commits": [],
+  "restarts": [],
+  "tokenUsage": {
+    "promptTokens": 0,
+    "completionTokens": 0,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0,
+    "totalTokens": 0,
+    "llmCalls": 0
+  }
+}

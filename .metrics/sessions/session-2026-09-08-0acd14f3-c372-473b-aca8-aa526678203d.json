@@ -1,0 +1,36 @@
+{
+  "sessionId": "0acd14f3-c372-473b-aca8-aa526678203d",
+  "date": "2026-09-08",
+  "startTime": "2026-09-08T06:04:33.550Z",
+  "endTime": "2026-09-08T06:04:33.853Z",
+  "transcriptPath": "/Users/iven/.claude/projects/-Users-iven-work-program-diary-blog/0acd14f3-c372-473b-aca8-aa526678203d.jsonl",
+  "cwd": "/Users/iven/work/program/diary_blog",
+  "source": "startup",
+  "prompts": [],
+  "toolCalls": [],
+  "skillCalls": [],
+  "slashCommands": [],
+  "subagentCalls": [],
+  "tasks": [],
+  "commits": [],
+  "restarts": [],
+  "tokenUsage": {
+    "promptTokens": 0,
+    "completionTokens": 0,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0,
+    "totalTokens": 0,
+    "llmCalls": 0
+  },
+  "endReason": "other",
+  "duration": 303,
+  "gitStats": {
+    "scope": "daily-2026-09-08",
+    "commits": 1,
+    "aiCommits": 0,
+    "insertions": 66,
+    "deletions": 22,
+    "aiCodeRatio": 0,
+    "codeSpeed": 4
+  }
+}

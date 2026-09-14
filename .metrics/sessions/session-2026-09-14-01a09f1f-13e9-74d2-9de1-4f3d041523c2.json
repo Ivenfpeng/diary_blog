@@ -1,0 +1,25 @@
+{
+  "sessionId": "01a09f1f-13e9-74d2-9de1-4f3d041523c2",
+  "date": "2026-09-14",
+  "startTime": "2026-09-14T08:53:42.589Z",
+  "endTime": null,
+  "transcriptPath": "",
+  "cwd": "/Users/iven/work/program/diary_blog",
+  "source": "codex-hook",
+  "prompts": [],
+  "toolCalls": [],
+  "skillCalls": [],
+  "slashCommands": [],
+  "subagentCalls": [],
+  "tasks": [],
+  "commits": [],
+  "restarts": [],
+  "tokenUsage": {
+    "promptTokens": 0,
+    "completionTokens": 0,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0,
+    "totalTokens": 0,
+    "llmCalls": 0
+  }
+}

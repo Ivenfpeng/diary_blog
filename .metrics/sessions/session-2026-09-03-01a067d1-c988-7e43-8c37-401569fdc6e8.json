@@ -1,0 +1,31 @@
+{
+  "sessionId": "01a067d1-c988-7e43-8c37-401569fdc6e8",
+  "date": "2026-09-03",
+  "startTime": "2026-09-03T15:10:01.521Z",
+  "endTime": null,
+  "transcriptPath": "/Users/iven/.codex/sessions/2026/09/03/rollout-2026-09-03T23-09-57-01a067d1-c988-7e43-8c37-401569fdc6e8.jsonl",
+  "cwd": "/Users/iven/work/program/diary_blog",
+  "source": "codex-hook",
+  "prompts": [
+    {
+      "timestamp": "2026-09-03T15:10:01.591Z",
+      "prompt": "有点问题\n",
+      "length": 5
+    }
+  ],
+  "toolCalls": [],
+  "skillCalls": [],
+  "slashCommands": [],
+  "subagentCalls": [],
+  "tasks": [],
+  "commits": [],
+  "restarts": [],
+  "tokenUsage": {
+    "promptTokens": 0,
+    "completionTokens": 0,
+    "cacheReadTokens": 0,
+    "cacheWriteTokens": 0,
+    "totalTokens": 0,
+    "llmCalls": 0
+  }
+}
