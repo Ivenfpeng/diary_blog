@@ -279,7 +279,7 @@ h1 { margin: 0; font-size: clamp(30px, 3vw, 46px); letter-spacing: -.05em; line-
 .save-status { color: #637168; font-size: 13px; white-space: nowrap; }.save-status.saving { color: #356b54; }.save-status.conflict, .save-status.error { color: #a33a32; }
 .editor-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, .88fr); gap: 18px; padding: clamp(18px, 2.2vw, 28px); border: 1px solid rgb(202 215 205 / 84%); border-radius: 28px; background: var(--admin-panel); box-shadow: var(--admin-shadow); backdrop-filter: blur(18px); }
 label { display: grid; gap: 6px; color: #39463e; font-size: 13px; font-weight: 650; }.wide { grid-column: 1 / -1; }
-input, select, textarea { min-width: 0; border: 1px solid #b9c5be; border-radius: 13px; padding: 11px 12px; font: inherit; background: rgb(255 255 255 / 94%); } textarea { resize: vertical; }
+input, select, textarea { min-width: 0; padding: 11px 12px; } textarea { resize: vertical; }
 .tag-options { min-width: 0; border: 0; margin: 0; padding: 0; display: grid; gap: 8px; color: #39463e; font-size: 13px; font-weight: 650; }
 .tag-options legend { padding: 0; margin-bottom: 2px; }
 .checkbox-label { display: flex; align-items: center; gap: 8px; font-weight: 500; }

@@ -272,7 +272,12 @@ func TestPublicPublicationSnapshotSurvivesUnpublishedEdits(t *testing.T) {
 		t.Fatalf("unpublished slug status = %d, want 404", response.StatusCode)
 	}
 	home := getHTML(t, server.URL+"/")
-	if !strings.Contains(home, "Reading Safely") || strings.Contains(home, "Unpublished rewrite") {
+	for _, want := range []string{"Reading Safely", "按分类阅读", "Databases"} {
+		if !strings.Contains(home, want) {
+			t.Fatalf("home missing grouped category content %q\n%s", want, home)
+		}
+	}
+	if strings.Contains(home, "Unpublished rewrite") {
 		t.Fatalf("home did not retain publication snapshot\n%s", home)
 	}
 	for _, path := range []string{"/categories/databases", "/tags/go"} {

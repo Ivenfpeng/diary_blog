@@ -82,6 +82,12 @@ h2 { font-size: 1.35rem; margin: 0; }
 .home-intro-note strong { font-size: .82rem; line-height: 1.55; }
 .home-content-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(14rem, 17rem); gap: clamp(1.5rem, 4vw, 3.5rem); max-width: 70rem; }
 .home-feed { min-width: 0; }
+.category-section { margin-bottom: clamp(2rem, 4vw, 3.25rem); }
+.category-section-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin-bottom: .8rem; padding-bottom: .65rem; border-bottom: 1px solid var(--neutral-300); }
+.category-section-heading h3 { margin: 0; font-size: clamp(1.35rem, 2.6vw, 2rem); }
+.category-section-heading a { color: var(--forest-800); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: .72rem; font-weight: 700; text-decoration: none; }
+.category-index { margin: 0 0 .15rem; color: var(--gold-600); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: .66rem; font-weight: 800; letter-spacing: .12em; }
+.category-section-grid { display: grid; gap: 1rem; }
 .feed-heading { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
 .feed-heading h2 { margin: 0; font-size: 1.55rem; }
 .feed-heading > a, .aside-more { color: var(--forest-800); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: .73rem; font-weight: 700; text-decoration: none; }

@@ -115,7 +115,7 @@ h1 { margin: 0; font-size: clamp(30px, 3vw, 44px); letter-spacing: -.045em; }
 .text-button:hover { color: #1677ff; }
 .post-filters { padding: 18px; border: 1px solid rgb(202 215 205 / 80%); border-radius: 22px; background: var(--admin-panel); box-shadow: var(--admin-shadow); backdrop-filter: blur(18px); }
 label { display: grid; gap: 5px; color: #39463e; font-size: 13px; font-weight: 650; }
-input, select { min-height: 44px; border: 1px solid #b9c5be; border-radius: 12px; padding: 0 12px; font: inherit; background: #fff; }
+input, select { min-height: 42px; padding: 0 12px; }
 .search-field { min-width: min(100%, 360px); flex: 1; }
 .post-list { max-height: min(62vh, 720px); overflow: auto; border: 1px solid rgb(202 215 205 / 80%); border-radius: 24px; background: var(--admin-panel-strong); box-shadow: var(--admin-shadow); scrollbar-gutter: stable; }
 .post-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border-top: 1px solid #edf0ee; color: inherit; text-decoration: none; transition: background .16s ease, transform .16s ease; }

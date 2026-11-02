@@ -41,6 +41,36 @@ select {
   font: inherit;
 }
 
+input,
+textarea,
+select {
+  color: var(--admin-ink);
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  background: #fff;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+
+input:hover,
+textarea:hover,
+select:hover {
+  border-color: #91caff;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #1677ff;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgb(22 119 255 / 12%);
+  outline: 0;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #bfbfbf;
+}
+
 button,
 input {
   border-radius: 6px;
@@ -104,7 +134,7 @@ a:focus-visible {
 .login-form { width: min(100%, 420px); display: grid; gap: 10px; padding: 34px; border: 1px solid rgb(202 215 205 / 80%); border-radius: 26px; background: var(--admin-panel); box-shadow: var(--admin-shadow); backdrop-filter: blur(18px); }
 .login-intro { margin: 0 0 18px; color: #5e6b64; line-height: 1.5; }
 .login-form label { font-size: 13px; font-weight: 650; }
-.login-form input { width: 100%; min-height: 44px; padding: 9px 12px; border: 1px solid #bdc9c1; background: #fff; color: inherit; }
+.login-form input { width: 100%; min-height: 44px; padding: 9px 12px; }
 .primary-button { min-height: 42px; margin-top: 12px; border: 1px solid #1677ff; border-radius: 10px; background: linear-gradient(135deg, #1677ff, #0958d9); color: #fff; font-weight: 750; cursor: pointer; box-shadow: 0 10px 26px rgb(22 119 255 / 18%); }
 .primary-button:hover:not(:disabled) { background: linear-gradient(135deg, #4096ff, #1677ff); transform: translateY(-1px); }
 .primary-button:disabled { cursor: wait; opacity: .7; }

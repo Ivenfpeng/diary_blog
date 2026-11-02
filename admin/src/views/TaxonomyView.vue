@@ -270,7 +270,7 @@ h1 {
   flex-wrap: wrap;
   padding: 18px;
   border: 1px solid rgb(202 215 205 / 80%);
-  border-radius: 22px;
+  border-radius: 16px;
   background: var(--admin-panel);
   box-shadow: var(--admin-shadow);
   backdrop-filter: blur(18px);
@@ -285,12 +285,8 @@ label {
 
 input,
 select {
-  min-height: 44px;
+  min-height: 42px;
   padding: 0 12px;
-  border: 1px solid #b9c5be;
-  border-radius: 12px;
-  font: inherit;
-  background: #fff;
 }
 
 .lists {
@@ -353,10 +349,12 @@ small {
   gap: 12px;
   padding: 24px;
   border: 1px solid #9eaea5;
-  border-radius: 22px;
+  border-radius: 16px;
   background: #fff;
   box-shadow: 0 12px 40px #193d2f33;
 }
+
+.dialog label { gap: 7px; }
 
 .dialog h2 {
   margin: 0;

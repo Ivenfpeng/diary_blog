@@ -11,17 +11,27 @@
 </section>
 <div class="home-content-grid">
   <section class="home-feed" aria-labelledby="latest-heading">
-    <div class="feed-heading"><div><p class="eyebrow">Latest notes</p><h2 id="latest-heading">最近更新</h2></div><a href="/archive">全部 →</a></div>
-    {{range $index, $post := .Posts}}
-    <article class="feed-card{{if eq $index 0}} feed-card-featured{{end}}">
-      {{if $post.CoverMediaPath}}<a class="feed-card-cover" href="/posts/{{$post.Slug}}"><img src="/media/{{$post.CoverMediaPath}}" alt="" loading="lazy"></a>{{end}}
-      <div class="feed-card-body">
-        <div class="feed-card-meta"><time datetime="{{formatTime $post.PublishedAt}}">{{formatDate $post.PublishedAt}}</time>{{with $post.Category}}<a href="/categories/{{.Slug}}">{{.Name}}</a>{{end}}</div>
-        <h3><a href="/posts/{{$post.Slug}}">{{$post.Title}}</a></h3>
-        {{if $post.Summary}}<p>{{$post.Summary}}</p>{{end}}
-        <div class="feed-card-footer"><div class="feed-tags">{{range $post.Tags}}<a href="/tags/{{.Slug}}">#{{.Name}}</a>{{end}}</div><a class="feed-read" href="/posts/{{$post.Slug}}">阅读文章 <span aria-hidden="true">↗</span></a></div>
+    <div class="feed-heading"><div><p class="eyebrow">Organized notes</p><h2 id="latest-heading">按分类阅读</h2></div><a href="/archive">全部 →</a></div>
+    {{range $sectionIndex, $section := .CategorySections}}
+    <section class="category-section" aria-labelledby="category-{{$sectionIndex}}">
+      <div class="category-section-heading">
+        <div><p class="category-index">{{printf "%02d" (add $sectionIndex 1)}}</p><h3 id="category-{{$sectionIndex}}">{{$section.Name}}</h3></div>
+        {{if $section.Slug}}<a href="/categories/{{$section.Slug}}">查看分类 ↗</a>{{end}}
       </div>
-    </article>
+      <div class="category-section-grid">
+        {{range $index, $post := $section.Posts}}
+        <article class="feed-card{{if and (eq $sectionIndex 0) (eq $index 0)}} feed-card-featured{{end}}">
+          {{if $post.CoverMediaPath}}<a class="feed-card-cover" href="/posts/{{$post.Slug}}"><img src="/media/{{$post.CoverMediaPath}}" alt="" loading="lazy"></a>{{end}}
+          <div class="feed-card-body">
+            <div class="feed-card-meta"><time datetime="{{formatTime $post.PublishedAt}}">{{formatDate $post.PublishedAt}}</time>{{with $post.Category}}<a href="/categories/{{.Slug}}">{{.Name}}</a>{{end}}</div>
+            <h3><a href="/posts/{{$post.Slug}}">{{$post.Title}}</a></h3>
+            {{if $post.Summary}}<p>{{$post.Summary}}</p>{{end}}
+            <div class="feed-card-footer"><div class="feed-tags">{{range $post.Tags}}<a href="/tags/{{.Slug}}">#{{.Name}}</a>{{end}}</div><a class="feed-read" href="/posts/{{$post.Slug}}">阅读文章 <span aria-hidden="true">↗</span></a></div>
+          </div>
+        </article>
+        {{end}}
+      </div>
+    </section>
     {{else}}<p class="empty-state">还没有公开文章，先写下第一篇吧。</p>{{end}}
   </section>
   <aside class="home-aside" aria-label="Explore">

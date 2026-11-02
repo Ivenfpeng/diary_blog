@@ -86,8 +86,7 @@ h1 { margin: 0; color: #12233f; font-size: clamp(32px, 4vw, 54px); letter-spacin
 label { display: grid; gap: 8px; color: #344054; font-size: 13px; font-weight: 750; }
 label span { display: grid; gap: 3px; }
 label small { color: #98a2b3; font-size: 11px; font-weight: 500; }
-input, textarea { width: 100%; border: 1px solid #d0d5dd; border-radius: 10px; padding: 12px 13px; color: #172b4d; font: inherit; background: #fcfdff; transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
-input:focus, textarea:focus { border-color: #1677ff; background: #fff; box-shadow: 0 0 0 3px #e6f4ff; outline: 0; }
+input, textarea { width: 100%; padding: 12px 13px; color: #172b4d; }
 textarea { resize: vertical; line-height: 1.6; }
 .form-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 4px; color: #98a2b3; font-size: 11px; }
 .primary-button { margin-top: 0; padding: 0 18px; }

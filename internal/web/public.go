@@ -56,6 +56,7 @@ type pageData struct {
 	OpenGraphType        string
 	OpenGraphImage       string
 	Posts                []posts.PublishedPost
+	CategorySections     []categorySection
 	Post                 posts.PublishedPost
 	Body                 template.HTML
 	Headings             []content.Heading
@@ -78,12 +79,19 @@ type pageData struct {
 	Status               int
 }
 
+type categorySection struct {
+	Name  string
+	Slug  string
+	Posts []posts.PublishedPost
+}
+
 func newPublicHandler(repository posts.Repository, publicURL string, clock func() time.Time, cache *site.Cache) (*publicHandler, error) {
 	publicBaseURL, err := normalizePublicURL(publicURL)
 	if err != nil {
 		return nil, err
 	}
 	base, err := template.New("base.html").Funcs(template.FuncMap{
+		"add": func(left, right int) int { return left + right },
 		"formatDate": func(value time.Time) string {
 			return value.Format("02 Jan 2006")
 		},
@@ -270,11 +278,37 @@ func (h *publicHandler) renderListing(w http.ResponseWriter, r *http.Request, te
 		return
 	}
 	data.Posts = items
+	if templateName == "home.html" {
+		data.CategorySections = groupByCategory(items)
+	}
 	data.Categories = taxonomy.Categories
 	data.Tags = taxonomy.Tags
 	data.CanonicalURL = h.publicURLForRequest(r, filter.Page, false)
 	h.applyPagination(r, &data, filter.Page, total, false)
 	h.render(w, r, http.StatusOK, templateName, data)
+}
+
+func groupByCategory(items []posts.PublishedPost) []categorySection {
+	sections := make([]categorySection, 0)
+	indexes := make(map[string]int)
+	for _, item := range items {
+		name, slug := "未分类", ""
+		if item.Category != nil {
+			name, slug = item.Category.Name, item.Category.Slug
+		}
+		key := slug
+		if key == "" {
+			key = "__uncategorized__"
+		}
+		index, ok := indexes[key]
+		if !ok {
+			index = len(sections)
+			indexes[key] = index
+			sections = append(sections, categorySection{Name: name, Slug: slug, Posts: make([]posts.PublishedPost, 0, 4)})
+		}
+		sections[index].Posts = append(sections[index].Posts, item)
+	}
+	return sections
 }
 
 func (h *publicHandler) article(w http.ResponseWriter, r *http.Request) {
