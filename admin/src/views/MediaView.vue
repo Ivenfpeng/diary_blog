@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Copy, Search, Trash2 } from '@lucide/vue'
+import { Copy, Search, Trash2, Upload } from '@lucide/vue'
 import { apiRequest } from '../api/client'
 import { notifyError, notifySuccess } from '../state/notifications'
 
@@ -134,9 +134,16 @@ onMounted(load)
   <section class="media-view" aria-labelledby="media-heading">
     <div class="view-heading"><div><p class="eyebrow">Library / Assets</p><h1 id="media-heading">Media</h1><p class="view-lede">Upload, review and reuse the images that give your articles a visual rhythm.</p></div><span class="media-count">{{ media.length }} assets</span></div>
     <form class="upload-form" @submit.prevent="upload">
-      <label>Image <input id="media-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" @change="selectFile" /></label>
+      <label class="file-field">
+        <span>Image</span>
+        <span class="file-picker">
+          <span class="file-picker-button">Choose image</span>
+          <span class="file-name">{{ selectedFile?.name || 'PNG, JPG, WebP or AVIF · up to 10 MB' }}</span>
+          <input id="media-file" class="file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" @change="selectFile" />
+        </span>
+      </label>
       <label>Alt text <input id="alt-text" v-model="altText" required placeholder="Describe the image" /></label>
-      <button class="primary-button" :disabled="uploading">{{ uploading ? 'Uploading…' : 'Upload image' }}</button>
+      <button class="primary-button upload-button" :disabled="uploading"><Upload :size="16" aria-hidden="true" /> {{ uploading ? 'Uploading…' : 'Upload image' }}</button>
     </form>
     <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
     <p v-if="statusMessage" class="muted">{{ statusMessage }}</p>
@@ -159,9 +166,16 @@ h1 { margin: 0; font-size: clamp(30px, 3vw, 44px); letter-spacing: -.045em; }
 .view-lede { max-width: 560px; margin: 8px 0 0; color: #667085; font-size: 14px; }
 .media-count { align-self: center; padding: 8px 11px; border: 1px solid #dbe3ed; border-radius: 999px; color: #667085; background: #fff; font-size: 12px; font-weight: 700; }
 .view-heading { margin-bottom: 0; }
-.upload-form { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; padding: 18px; border: 1px solid rgb(202 215 205 / 80%); border-radius: 22px; background: var(--admin-panel); box-shadow: var(--admin-shadow); backdrop-filter: blur(18px); }
+.upload-form { display: flex; align-items: end; gap: 14px; flex-wrap: wrap; padding: 18px; border: 1px solid rgb(202 215 205 / 80%); border-radius: 18px; background: var(--admin-panel); box-shadow: var(--admin-shadow); backdrop-filter: blur(18px); }
 label { display: grid; gap: 6px; color: #39463e; font-size: 13px; font-weight: 650; }
+.file-field { flex: 1 1 360px; min-width: min(100%, 360px); }
+.file-picker { position: relative; display: flex; min-height: 42px; align-items: center; gap: 10px; overflow: hidden; padding: 4px; border: 1px solid #d9d9d9; border-radius: 8px; background: #fff; transition: border-color .16s ease, box-shadow .16s ease; }
+.file-picker:focus-within { border-color: #1677ff; box-shadow: 0 0 0 3px rgb(22 119 255 / 12%); }
+.file-picker-button { display: inline-flex; min-height: 32px; align-items: center; padding: 0 11px; border-radius: 6px; color: #1677ff; background: #e6f4ff; font-size: 12px; font-weight: 750; white-space: nowrap; }
+.file-name { min-width: 0; overflow: hidden; color: #8c8c8c; font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.file-input { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; opacity: 0; }
 input { min-height: 42px; padding: 0 12px; }
+.upload-button { display: inline-flex; min-height: 42px; align-items: center; gap: 7px; margin: 0; padding: 0 16px; border-radius: 8px; box-shadow: 0 6px 16px rgb(22 119 255 / 16%); }
 .media-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
 .media-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .media-search { display: flex; flex: 1; align-items: center; gap: 8px; max-width: 520px; padding: 0 12px; border: 1px solid #d0d5dd; border-radius: 10px; color: #98a2b3; background: #fff; }
@@ -177,5 +191,5 @@ input { min-height: 42px; padding: 0 12px; }
 .danger-action { color: #cf1322; }.danger-action:hover { color: #a8071a; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .muted { color: #68756d; }
-@media (max-width: 600px) { .media-toolbar { align-items: stretch; flex-direction: column; }.media-search { max-width: none; }.media-count { align-self: start; } }
+@media (max-width: 600px) { .media-toolbar { align-items: stretch; flex-direction: column; }.media-search { max-width: none; }.media-count { align-self: start; }.file-field { min-width: 100%; }.upload-button { width: 100%; justify-content: center; } }
 </style>
