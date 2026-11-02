@@ -246,7 +246,8 @@ Compose 服务器。脚本不会自动 commit、push Git，也不会删除本地
 首次配置：
 
 ```sh
-docker login ghcr.io -u Ivenfpeng
+docker login ghcr.io -u Ivenfpeng  # 有 Docker 时
+# 本机只有 Podman 时：podman login ghcr.io -u Ivenfpeng
 ssh-copy-id root@167.179.105.202  # 或提前配置好 SSH 公钥登录
 ./scripts/release-remote.sh --help
 ```
@@ -293,8 +294,8 @@ TARGET_PLATFORMS=linux/amd64,linux/arm64 ./scripts/release-remote.sh
 TARGET_PLATFORMS=linux/amd64 ./scripts/release-remote.sh
 ```
 
-脚本默认拒绝未提交工作区，避免误发布半成品。如果明确要发布当前未提交
-修改：
+脚本默认拒绝未提交源码修改，避免误发布半成品；本地生成的 `bin/blog` 和
+`.metrics/` 会自动忽略。如果明确要发布当前未提交源码修改：
 
 ```sh
 ALLOW_DIRTY=1 ./scripts/release-remote.sh

@@ -13,6 +13,8 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
 
 首次使用：先登录 GHCR，并确认本机 SSH 无密码连接远端服务器。
   docker login ghcr.io -u Ivenfpeng
+  # 本机没有 Docker 时使用：
+  podman login ghcr.io -u Ivenfpeng
 
 常用环境变量：
   REMOTE_HOST             远端 IP/域名，默认 167.179.105.202
@@ -40,12 +42,14 @@ BACKUP_BEFORE_DEPLOY=${BACKUP_BEFORE_DEPLOY:-1}
 SKIP_CHECKS=${SKIP_CHECKS:-0}
 
 SHORT_SHA=$(git rev-parse --short HEAD 2>/dev/null || printf 'nogit')
-if git diff --quiet && git diff --cached --quiet; then
+DIRTY_FILES=$(git status --porcelain=v1 | awk '{ path = substr($0, 4); if (path == "bin/blog" || path ~ /^\.metrics\//) next; print }')
+if [[ -z "$DIRTY_FILES" ]]; then
   TREE_SUFFIX=""
 else
   TREE_SUFFIX="-dirty"
   if [[ "${ALLOW_DIRTY:-0}" != "1" ]]; then
-    echo "工作区存在未提交修改。确认要发布当前工作区时，请设置 ALLOW_DIRTY=1。" >&2
+    printf '工作区存在未提交代码修改：\n%s\n' "$DIRTY_FILES" >&2
+    echo "确认要发布当前工作区时，请设置 ALLOW_DIRTY=1。" >&2
     exit 1
   fi
   echo "警告：将发布当前未提交工作区，镜像标签会带 dirty。" >&2
