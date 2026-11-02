@@ -298,6 +298,24 @@ func (r *PostRepository) Archive(ctx context.Context, id, expectedRevision int64
 	return archived, nil
 }
 
+func (r *PostRepository) Delete(ctx context.Context, id int64) error {
+	current, err := r.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if current.Status != content.StatusArchived {
+		return posts.ErrValidation
+	}
+	result, err := r.db.ExecContext(ctx, "DELETE FROM posts WHERE id = ? AND status = ?", id, content.StatusArchived)
+	if err != nil {
+		return fmt.Errorf("delete post: %w", err)
+	}
+	if err := requireUpdated(result); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *PostRepository) GetPublishedBySlug(ctx context.Context, slug string) (posts.PublishedPost, error) {
 	var id int64
 	err := r.db.QueryRowContext(ctx, "SELECT post_id FROM published_posts WHERE slug = ?", slug).Scan(&id)

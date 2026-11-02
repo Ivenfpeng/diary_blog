@@ -90,6 +90,7 @@ func (a *adminPostAPI) routes(router chi.Router, requireSession, requireCSRF fun
 		router.Post("/api/admin/posts/{id}/preview", a.preview)
 		router.Post("/api/admin/posts/{id}/publish", a.publish)
 		router.Post("/api/admin/posts/{id}/archive", a.archive)
+		router.Delete("/api/admin/posts/{id}", a.delete)
 		router.Get("/api/admin/posts/{id}/revisions", a.listRevisions)
 		router.Post("/api/admin/posts/{id}/revisions/{revisionID}/restore", a.restoreRevision)
 	})
@@ -182,6 +183,18 @@ func (a *adminPostAPI) publish(w http.ResponseWriter, r *http.Request) {
 
 func (a *adminPostAPI) archive(w http.ResponseWriter, r *http.Request) {
 	a.changeRevision(w, r, a.posts.Archive)
+}
+
+func (a *adminPostAPI) delete(w http.ResponseWriter, r *http.Request) {
+	id, ok := postID(w, r)
+	if !ok {
+		return
+	}
+	if err := a.posts.Delete(r.Context(), id); err != nil {
+		a.writePostError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (a *adminPostAPI) changeRevision(w http.ResponseWriter, r *http.Request, action func(context.Context, int64, int64) (content.Post, error)) {

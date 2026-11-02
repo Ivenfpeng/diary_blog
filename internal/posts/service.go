@@ -125,6 +125,13 @@ func (s *Service) Archive(ctx context.Context, id, expectedRevision int64) (cont
 	return s.repo.Archive(ctx, id, expectedRevision, s.clock())
 }
 
+func (s *Service) Delete(ctx context.Context, id int64) error {
+	if err := validateID(id, "post id"); err != nil {
+		return err
+	}
+	return s.repo.Delete(ctx, id)
+}
+
 func validateInput(input content.PostInput, requirePublishFields bool) error {
 	if len(input.ContentMD) > maxContentBytes || !utf8.ValidString(input.ContentMD) {
 		return validationError("content is invalid or exceeds 2 MiB")

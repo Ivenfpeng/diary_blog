@@ -2,10 +2,14 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 )
+
+var ErrMediaReferenced = ErrReferenced
 
 type Media struct {
 	ID        int64     `json:"id"`
@@ -80,6 +84,30 @@ func (r *PostRepository) UpdateMediaAltText(ctx context.Context, id int64, altTe
 		}
 	}
 	return Media{}, ErrNotFound
+}
+
+func (r *PostRepository) DeleteMedia(ctx context.Context, id int64) (string, error) {
+	var path string
+	if err := r.db.QueryRowContext(ctx, "SELECT path FROM media WHERE id = ?", id).Scan(&path); errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	} else if err != nil {
+		return "", fmt.Errorf("find media: %w", err)
+	}
+	var references int
+	if err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM posts WHERE cover_media_id = ?", id).Scan(&references); err != nil {
+		return "", fmt.Errorf("check media references: %w", err)
+	}
+	if references > 0 {
+		return "", ErrReferenced
+	}
+	result, err := r.db.ExecContext(ctx, "DELETE FROM media WHERE id = ?", id)
+	if err != nil {
+		return "", fmt.Errorf("delete media: %w", err)
+	}
+	if err := requireUpdated(result); err != nil {
+		return "", err
+	}
+	return path, nil
 }
 func allowedMediaType(mime string) bool {
 	switch mime {

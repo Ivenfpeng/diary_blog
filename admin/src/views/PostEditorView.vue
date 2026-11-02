@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ArrowLeft, Save } from '@lucide/vue'
+import { ArrowLeft, Save, Trash2 } from '@lucide/vue'
 import { useRoute, useRouter } from 'vue-router'
 import MarkdownEditor from '../components/MarkdownEditor.vue'
 import PublishPanel from '../components/PublishPanel.vue'
@@ -202,6 +202,20 @@ async function archive(): Promise<void> {
     destructiveActionInFlight.value = false
   }
 }
+async function deleteArticle(): Promise<void> {
+  if (destructiveActionsLocked.value || editor.article.status !== 'archived') return
+  if (!window.confirm('Delete this archived article permanently? This cannot be undone.')) return
+  destructiveActionInFlight.value = true
+  try {
+    await apiRequest(`/api/admin/posts/${editor.article.id}`, { method: 'DELETE' })
+    notifySuccess('Article deleted', 'The archived article was permanently removed.')
+    await router.push({ name: 'posts' })
+  } catch (error) {
+    notifyError('Delete failed', error instanceof Error ? error.message : 'Unable to delete this article.')
+  } finally {
+    destructiveActionInFlight.value = false
+  }
+}
 async function restore(revision: PostRevision): Promise<void> {
   if (destructiveActionsLocked.value) return
   const snapshot = articleSnapshot()
@@ -249,7 +263,7 @@ onMounted(load)
           </label>
         </fieldset>
         <label class="wide">Content <MarkdownEditor :model-value="editor.article.content_md" :disabled="destructiveActionInFlight" :upload-image="uploadEditorImage" @update:model-value="updateField('content_md', $event)" /></label>
-        <div class="editor-actions"><button type="submit" class="secondary-button" :disabled="editor.saving.value || destructiveActionInFlight || !editor.dirty.value || Boolean(clientValidationMessage)"><Save :size="16" aria-hidden="true" /> Save now</button><PublishPanel :can-publish="canPublish" :saving="editor.saving.value || destructiveActionInFlight" :actions-locked="destructiveActionsLocked" :status="editor.article.status" @preview="preview" @publish="publish" @archive="archive" /></div>
+        <div class="editor-actions"><button type="submit" class="secondary-button" :disabled="editor.saving.value || destructiveActionInFlight || !editor.dirty.value || Boolean(clientValidationMessage)"><Save :size="16" aria-hidden="true" /> Save now</button><PublishPanel :can-publish="canPublish" :saving="editor.saving.value || destructiveActionInFlight" :actions-locked="destructiveActionsLocked" :status="editor.article.status" @preview="preview" @publish="publish" @archive="archive" /><button v-if="editor.article.status === 'archived'" type="button" class="danger-button" :disabled="destructiveActionsLocked" @click="deleteArticle"><Trash2 :size="16" aria-hidden="true" /> Delete permanently</button></div>
       </form>
       <section v-if="editor.previewHTML.value" class="preview" aria-labelledby="preview-heading"><h2 id="preview-heading">Preview</h2><div v-html="editor.previewHTML.value" /></section>
       <RevisionPanel :revisions="revisions" :restoring="restoring" :actions-locked="destructiveActionsLocked" @restore="restore" />
@@ -271,6 +285,7 @@ input, select, textarea { min-width: 0; border: 1px solid #b9c5be; border-radius
 .checkbox-label { display: flex; align-items: center; gap: 8px; font-weight: 500; }
 .checkbox-label input { min-width: auto; padding: 0; }
 .editor-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; border-top: 1px solid #d9dfdb; padding-top: 18px; }.secondary-button { min-height: 42px; display: inline-flex; align-items: center; gap: 7px; padding: 0 14px; border: 1px solid #9eaea5; border-radius: 13px; background: #fff; color: #193d2f; font: inherit; font-weight: 750; cursor: pointer; }
+.danger-button { min-height: 42px; display: inline-flex; align-items: center; gap: 7px; margin-left: auto; border: 1px solid #ffccc7; border-radius: 13px; padding: 0 14px; color: #cf1322; background: #fff2f0; font: inherit; font-weight: 750; cursor: pointer; }.danger-button:hover:not(:disabled) { border-color: #ff7875; background: #fff1f0; }.danger-button:disabled { opacity: .55; cursor: not-allowed; }
 .preview { border: 1px solid rgb(202 215 205 / 84%); border-radius: 24px; background: var(--admin-panel-strong); margin-top: 8px; padding: 22px; box-shadow: var(--admin-shadow); }.preview h2 { margin: 0 0 12px; font-size: 18px; }.muted { color: #68756d; }
 @media (max-width: 760px) { .editor-form { grid-template-columns: 1fr; border-radius: 22px; }.wide, .editor-actions { grid-column: auto; }.editor-heading { align-items: flex-start; flex-direction: column; } }
 </style>

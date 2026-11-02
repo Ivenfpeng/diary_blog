@@ -115,6 +115,29 @@ func TestPostRepositoryPublishesSearchesAndArchives(t *testing.T) {
 	}
 }
 
+func TestPostRepositoryDeletesOnlyArchivedPosts(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := newPostRepository(t)
+	now := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
+	draft, err := repo.CreateDraft(ctx, content.PostInput{Slug: "delete-me", Title: "Delete me", ContentMD: "draft"}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Delete(ctx, draft.ID); !errors.Is(err, posts.ErrValidation) {
+		t.Fatalf("delete draft error = %v, want validation", err)
+	}
+	archived, err := repo.Archive(ctx, draft.ID, draft.Revision, now.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Delete(ctx, archived.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.GetByID(ctx, archived.ID); !errors.Is(err, posts.ErrNotFound) {
+		t.Fatalf("deleted post lookup = %v, want not found", err)
+	}
+}
+
 func TestPostRepositoryPublishRollsBackWhenIndexingFails(t *testing.T) {
 	ctx := context.Background()
 	repo, db := newPostRepository(t)

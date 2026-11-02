@@ -58,6 +58,7 @@ func (a *adminManagementAPI) routes(router chi.Router, requireSession, requireCS
 		router.Get("/api/admin/media", a.listMedia)
 		router.Post("/api/admin/media", a.uploadMedia)
 		router.Patch("/api/admin/media/{id}", a.updateMediaAltText)
+		router.Delete("/api/admin/media/{id}", a.deleteMedia)
 		router.Get("/api/admin/settings", a.getSettings)
 		router.Put("/api/admin/settings", a.saveSettings)
 	})
@@ -179,6 +180,23 @@ func (a *adminManagementAPI) updateMediaAltText(w http.ResponseWriter, r *http.R
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"media": item})
+}
+
+func (a *adminManagementAPI) deleteMedia(w http.ResponseWriter, r *http.Request) {
+	id, ok := managementID(w, r)
+	if !ok {
+		return
+	}
+	path, err := a.repository.DeleteMedia(r.Context(), id)
+	if err != nil {
+		a.writeError(w, r, err)
+		return
+	}
+	if err := os.Remove(filepath.Join(a.mediaDir, filepath.FromSlash(path))); err != nil && !errors.Is(err, os.ErrNotExist) {
+		a.writeError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 func (a *adminManagementAPI) getSettings(w http.ResponseWriter, r *http.Request) {
 	value, err := a.repository.GetSettings(r.Context())

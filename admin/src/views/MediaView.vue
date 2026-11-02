@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Copy, Search } from '@lucide/vue'
+import { Copy, Search, Trash2 } from '@lucide/vue'
 import { apiRequest } from '../api/client'
 import { notifyError, notifySuccess } from '../state/notifications'
 
@@ -115,6 +115,18 @@ async function copyURL(item: Media): Promise<void> {
   }
 }
 
+async function deleteMedia(item: Media): Promise<void> {
+  if (!window.confirm(`Delete ${item.alt_text || 'this image'} permanently?`)) return
+  try {
+    await apiRequest(`/api/admin/media/${item.id}`, { method: 'DELETE' })
+    media.value = media.value.filter((entry) => entry.id !== item.id)
+    notifySuccess('Image deleted', 'The media file was removed from the library.')
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Unable to delete image.'
+    notifyError('Image delete failed', errorMessage.value)
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -134,7 +146,7 @@ onMounted(load)
         <img :src="`/media/${item.path}`" :alt="item.alt_text" />
         <div><strong>{{ item.alt_text || 'Untitled image' }}</strong><small>{{ item.mime_type }} · {{ item.width }}×{{ item.height }}</small></div>
         <label class="alt-editor">Alt text <input :id="`media-alt-${item.id}`" v-model="altDrafts[item.id]" /></label>
-        <div class="media-actions"><button type="button" class="secondary-button" :data-testid="`save-alt-${item.id}`" :disabled="savingAltID === item.id" @click="saveAltText(item)">Save alt text</button><button type="button" class="icon-action" :aria-label="`Copy URL for ${item.alt_text}`" @click="copyURL(item)"><Copy :size="15" aria-hidden="true" /> Copy URL</button></div>
+        <div class="media-actions"><button type="button" class="secondary-button" :data-testid="`save-alt-${item.id}`" :disabled="savingAltID === item.id" @click="saveAltText(item)">Save alt text</button><button type="button" class="icon-action" :aria-label="`Copy URL for ${item.alt_text}`" @click="copyURL(item)"><Copy :size="15" aria-hidden="true" /> Copy URL</button><button type="button" class="icon-action danger-action" :aria-label="`Delete ${item.alt_text}`" @click="deleteMedia(item)"><Trash2 :size="15" aria-hidden="true" /> Delete</button></div>
       </article>
       <p v-if="!filteredMedia.length" class="muted">{{ media.length ? 'No media matches this search.' : 'No media uploaded yet.' }}</p>
     </div>
@@ -162,6 +174,7 @@ input { min-height: 44px; border: 1px solid #b9c5be; border-radius: 12px; paddin
 .media-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .icon-action { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; border: 0; color: #1677ff; background: transparent; font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
 .icon-action:hover { color: #0958d9; }
+.danger-action { color: #cf1322; }.danger-action:hover { color: #a8071a; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .muted { color: #68756d; }
 @media (max-width: 600px) { .media-toolbar { align-items: stretch; flex-direction: column; }.media-search { max-width: none; }.media-count { align-self: start; } }

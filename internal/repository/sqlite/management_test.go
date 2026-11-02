@@ -109,3 +109,25 @@ func TestMediaMetadataAndSettingsValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMediaDeletionRejectsReferencedFiles(t *testing.T) {
+	ctx := context.Background()
+	repo, db := newPostRepository(t)
+	now := time.Date(2026, 9, 5, 12, 0, 0, 0, time.UTC)
+	media, err := repo.CreateMedia(ctx, sqliterepo.MediaInput{Path: "2026/09/delete.png", MIMEType: "image/png", Width: 2, Height: 2, Size: 4}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO posts (slug, title, content_md, status, cover_media_id, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)", "uses-media", "Uses media", "body", content.StatusDraft, media.ID, now.Format(time.RFC3339), now.Format(time.RFC3339)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.DeleteMedia(ctx, media.ID); !errors.Is(err, sqliterepo.ErrReferenced) {
+		t.Fatalf("delete referenced media = %v, want ErrReferenced", err)
+	}
+	if _, err := db.ExecContext(ctx, "DELETE FROM posts WHERE slug = ?", "uses-media"); err != nil {
+		t.Fatal(err)
+	}
+	if path, err := repo.DeleteMedia(ctx, media.ID); err != nil || path != media.Path {
+		t.Fatalf("delete media path=%q err=%v", path, err)
+	}
+}

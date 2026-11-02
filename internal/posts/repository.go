@@ -63,6 +63,7 @@ type Repository interface {
 	RestoreRevision(context.Context, int64, int64, int64, time.Time) (content.Post, error)
 	Publish(context.Context, int64, content.RenderedContent, int64, time.Time) (content.Post, error)
 	Archive(context.Context, int64, int64, time.Time) (content.Post, error)
+	Delete(context.Context, int64) error
 	GetPublishedBySlug(context.Context, string) (PublishedPost, error)
 	ListPublished(context.Context, PublishedFilter) ([]PublishedPost, int, error)
 	SearchPublished(context.Context, string, int, int) ([]PublishedPost, int, error)
