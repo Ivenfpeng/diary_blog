@@ -313,9 +313,26 @@ func TestMediaManagementAPIStoresValidatedUploadInConfiguredDirectory(t *testing
 	assertAPIError(t, invalid, http.StatusBadRequest, "media_validation", "The uploaded image is invalid.")
 }
 
+func TestMediaManagementAPIAcceptsCompressedImageWithinFiftyMiBDecodedLimit(t *testing.T) {
+	server, _, session, csrf := newAdminServerWithMediaDir(t, t.TempDir())
+	var body bytes.Buffer
+	largeDimensions := image.NewRGBA(image.Rect(0, 0, 4000, 3000))
+	if err := png.Encode(&body, largeDimensions); err != nil {
+		t.Fatal(err)
+	}
+	if body.Len() >= 500*1024 {
+		t.Fatalf("test image unexpectedly large: %d bytes", body.Len())
+	}
+
+	response := multipartAdminRequest(t, server, session, csrf, "/api/admin/media", "compressed-large.png", body.Bytes(), "Compressed large image")
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("compressed large image status = %d: %s", response.StatusCode, readBody(t, response))
+	}
+}
+
 func TestMediaManagementAPIRejectsOversizedUpload(t *testing.T) {
 	server, _, session, csrf := newAdminServerWithMediaDir(t, t.TempDir())
-	response := multipartAdminRequest(t, server, session, csrf, "/api/admin/media", "large.png", bytes.Repeat([]byte{'x'}, int(10*1024*1024+1)), "Oversized")
+	response := multipartAdminRequest(t, server, session, csrf, "/api/admin/media", "large.png", bytes.Repeat([]byte{'x'}, int(50*1024*1024+1)), "Oversized")
 	if response.StatusCode != http.StatusBadRequest {
 		t.Fatalf("oversized upload status = %d: %s", response.StatusCode, readBody(t, response))
 	}
@@ -323,7 +340,7 @@ func TestMediaManagementAPIRejectsOversizedUpload(t *testing.T) {
 
 func TestMediaManagementAPIRejectsRequestLargerThanLimit(t *testing.T) {
 	server, _, session, csrf := newAdminServerWithMediaDir(t, t.TempDir())
-	response := multipartAdminRequest(t, server, session, csrf, "/api/admin/media", "near-limit.png", bytes.Repeat([]byte{'x'}, int(10*1024*1024-1024)), "Near limit")
+	response := multipartAdminRequest(t, server, session, csrf, "/api/admin/media", "near-limit.png", bytes.Repeat([]byte{'x'}, int(50*1024*1024-1024)), "Near limit")
 	if response.StatusCode != http.StatusBadRequest {
 		t.Fatalf("over-limit request status = %d: %s", response.StatusCode, readBody(t, response))
 	}

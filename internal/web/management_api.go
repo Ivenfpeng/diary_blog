@@ -25,7 +25,7 @@ import (
 	"golang.org/x/image/webp"
 )
 
-const adminMediaBodyLimit int64 = 10 * 1024 * 1024
+const adminMediaBodyLimit int64 = 50 * 1024 * 1024
 
 type adminManagementAPI struct {
 	repository *sqlite.PostRepository
@@ -261,7 +261,7 @@ func (a *adminManagementAPI) uploadMedia(w http.ResponseWriter, r *http.Request)
 	size, err := io.Copy(tmp, limited)
 	if err != nil || size > adminMediaBodyLimit {
 		_ = tmp.Close()
-		writeAPIError(w, r, http.StatusBadRequest, "media_validation", "Images must be 10 MiB or smaller.")
+		writeAPIError(w, r, http.StatusBadRequest, "media_validation", "Images must be 50 MiB or smaller.")
 		return
 	}
 	if err := tmp.Sync(); err != nil {
@@ -279,7 +279,7 @@ func (a *adminManagementAPI) uploadMedia(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if int64(width)*int64(height) > adminMediaBodyLimit/4 {
-		writeAPIError(w, r, http.StatusBadRequest, "media_validation", "Decoded images must be 10 MiB or smaller.")
+		writeAPIError(w, r, http.StatusBadRequest, "media_validation", "Decoded images must be 50 MiB or smaller.")
 		return
 	}
 	bytes := make([]byte, 16)

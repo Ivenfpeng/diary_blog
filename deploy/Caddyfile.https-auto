@@ -7,7 +7,7 @@
 
 	@media_upload path /api/admin/media
 	request_body @media_upload {
-		max_size 10MiB
+		max_size 50MiB
 	}
 
 	header {

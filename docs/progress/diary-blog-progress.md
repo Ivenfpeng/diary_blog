@@ -74,7 +74,7 @@
 - 管理文章 JSON API 已完成，包含稳定错误 envelope、严格 JSON 解码、2 MiB body 限制、乐观锁冲突映射和显式 admin 路由。
 - Vue 管理后台基础 shell 已完成，包含 typed API client、会话恢复、路由守卫、登录表单、固定侧栏、移动抽屉、全局操作通知栏、固定视口内主内容滚动和统一滚动条样式。
 - 文章列表与富文本编辑器已完成，包含 autosave 串行化、冲突态保护、contenteditable 富文本编辑、DOM 到 Markdown 序列化、编辑器内媒体上传/粘贴/拖入与图片插入、data URL 图片保存拦截、标题自动生成中文 Slug、外层空白区域点击聚焦、全高可编辑区域、预览、发布、归档和版本恢复。
-- 分类、标签、媒体库与站点设置已完成，包含 CSRF 管理端点、SQLite 全局 taxonomy slug trigger、10 MiB 媒体上传边界、WebP 解码校验、AVIF 结构校验、媒体 alt text 更新和管理视图 edit/delete 对话框。
+- 分类、标签、媒体库与站点设置已完成，包含 CSRF 管理端点、SQLite 全局 taxonomy slug trigger、50 MiB 媒体上传边界、WebP 解码校验、AVIF 结构校验、媒体 alt text 更新和管理视图 edit/delete 对话框。
 - 运行期能力已完成，包含 JSON slog、请求 ID、访问日志 status/bytes/route pattern、panic recovery、readyz 存储检查、进程内公开页/RSS/Sitemap 缓存、发布/归档缓存失效和 10 秒优雅停机。
 - 备份、恢复、迁移与管理 CLI 已完成，包含 SQLite online backup、`.tar.gz` manifest/checksum、恢复前数据库/迁移验证、强制恢复 rollback、`backup`/`restore`/`migrate`/`admin reset-password`/`search rebuild` 子命令，以及备份输出 media/symlink 防护。
 - 生产容器化已完成，包含 Node 24 + Go 1.27 多阶段 Dockerfile、GHCR 镜像发布 workflow、源码构建 Compose、image-only 部署 Compose、构建期 `GOPROXY`/`GOSUMDB` 透传、非 root runtime、Compose Blog/Caddy 拓扑、Docker/Podman Compose 命令切换、默认本地/内网 HTTP-only、Caddy 自动 HTTPS、自带 PEM 证书 HTTPS、Caddy 压缩/安全头/10MiB 上传限制、`/data/site` 应用目录、`/data/backups` 备份路径和 restore-safe Makefile 目标。
@@ -168,6 +168,7 @@
 | 2026-11-02 23:20 CST | 新增 `scripts/release-remote.sh` 一键发布脚本：本地检查、Docker Buildx/Podman amd64 镜像推送、远端备份、Compose 升级和线上健康检查串联完成；README 与发布手册同步补充参数和回滚说明。 |
 | 2026-11-02 23:30 CST | 一键发布脚本升级为默认多架构发布：Docker Buildx 一次推送 `linux/amd64,linux/arm64`，Podman 通过 manifest list 推送两个架构；增加 `TARGET_PLATFORMS` 覆盖参数。 |
 | 2026-11-02 23:40 CST | 根据本地无 Docker 的发布反馈，补充 `podman login` 用法；脚本自动忽略生成的 `bin/blog` 与 `.metrics/`，只对真实源码未提交修改要求 `ALLOW_DIRTY=1`。 |
+| 2026-11-02 23:50 CST | 媒体上传限制统一调整为 50 MiB：后端原始文件/解码内存、三套 Caddy 配置和管理端提示同步更新；新增压缩文件较小但解码尺寸较大的回归测试，确认不再误报 10 MiB。 |
 
 ## 下一跟进点
 

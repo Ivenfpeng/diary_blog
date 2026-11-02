@@ -138,7 +138,7 @@ onMounted(load)
         <span>Image</span>
         <span class="file-picker">
           <span class="file-picker-button">Choose image</span>
-          <span class="file-name">{{ selectedFile?.name || 'PNG, JPG, WebP or AVIF · up to 10 MB' }}</span>
+          <span class="file-name">{{ selectedFile?.name || 'PNG, JPG, WebP or AVIF · up to 50 MB' }}</span>
           <input id="media-file" class="file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" @change="selectFile" />
         </span>
       </label>

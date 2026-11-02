@@ -202,6 +202,8 @@ docker compose -f compose.deploy.yaml -f compose.https-files.yaml up -d
 
 图片建议通过编辑器工具栏的 Image 按钮上传，也可以直接粘贴图片文件或拖入图片文件；编辑器会复用媒体库上传接口，并插入 `/media/...` Markdown 图片链接。不要把 `data:image/...;base64,...` 这类超长 data URL 存进文章；编辑器会主动拦截这种内容，避免发布后图片被安全渲染链路过滤、页面看起来空白。
 
+媒体上传上限为 50 MiB：同时限制上传文件原始大小和解码后的图像内存大小，Caddy 反向代理也同步放宽到 50 MiB。注意压缩文件只有 300 KB，不代表解码后占用也只有 300 KB；超高分辨率图片仍可能因为解码尺寸过大被拒绝。
+
 文章、分类、标签的 Slug 现在支持 Unicode 字母、Unicode 数字和单个连字符，因此中文 Slug 可以直接使用，例如：
 
 ```text
