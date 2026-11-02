@@ -166,6 +166,7 @@
 | 2026-11-02 23:00 CST | 媒体库上传控件优化：移除浏览器原生文件按钮，改为自定义图片选择器、文件名提示和紧凑上传按钮；管理端 37 项测试与前端构建通过。 |
 | 2026-11-02 23:05 CST | 管理端操作通知增加 3 秒自动关闭，同时保留手动关闭按钮；新增 fake timer 回归测试，管理端测试提升至 38 项。 |
 | 2026-11-02 23:20 CST | 新增 `scripts/release-remote.sh` 一键发布脚本：本地检查、Docker Buildx/Podman amd64 镜像推送、远端备份、Compose 升级和线上健康检查串联完成；README 与发布手册同步补充参数和回滚说明。 |
+| 2026-11-02 23:30 CST | 一键发布脚本升级为默认多架构发布：Docker Buildx 一次推送 `linux/amd64,linux/arm64`，Podman 通过 manifest list 推送两个架构；增加 `TARGET_PLATFORMS` 覆盖参数。 |
 
 ## 下一跟进点
 

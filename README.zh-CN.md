@@ -13,7 +13,7 @@ docker login ghcr.io -u Ivenfpeng
 ./scripts/release-remote.sh
 ```
 
-脚本会运行本地检查、构建并推送 `linux/amd64` 镜像、备份远端数据、更新远端
+脚本会运行本地检查、同时构建并推送 `linux/amd64` + `linux/arm64` 多架构镜像、备份远端数据、更新远端
 `.env`、重启 Compose，并检查 `/healthz`、首页和管理台。详细参数见[发布与部署操作手册](docs/release-deployment.zh-CN.md)。
 
 ## 技术栈

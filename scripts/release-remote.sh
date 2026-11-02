@@ -19,6 +19,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   REMOTE_DIR              远端部署目录，默认 /root/diary_blog
   REMOTE_COMPOSE_FILES    Compose 参数，默认 '-f compose.deploy.yaml'
   REMOTE_HEALTH_URL       发布后检查地址，默认 https://ivenpeng.top
+  TARGET_PLATFORMS        构建平台，默认 linux/amd64,linux/arm64
   RELEASE_TAG             镜像标签，默认 deploy-时间-commit
   ALLOW_DIRTY=1           允许发布未提交工作区
   SKIP_CHECKS=1           跳过本地 make test/make vet
@@ -33,6 +34,7 @@ REMOTE_DIR=${REMOTE_DIR:-/root/diary_blog}
 REMOTE_COMPOSE_FILES=${REMOTE_COMPOSE_FILES:--f compose.deploy.yaml}
 REMOTE_HEALTH_URL=${REMOTE_HEALTH_URL:-https://ivenpeng.top}
 IMAGE_REPOSITORY=${IMAGE_REPOSITORY:-ghcr.io/ivenfpeng/diary_blog}
+TARGET_PLATFORMS=${TARGET_PLATFORMS:-linux/amd64,linux/arm64}
 GOPROXY=${GOPROXY:-https://goproxy.cn,direct}
 BACKUP_BEFORE_DEPLOY=${BACKUP_BEFORE_DEPLOY:-1}
 SKIP_CHECKS=${SKIP_CHECKS:-0}
@@ -69,18 +71,24 @@ fi
 log "构建并推送 ${IMAGE}"
 if command -v docker >/dev/null && docker buildx version >/dev/null 2>&1; then
   docker buildx build \
-    --platform linux/amd64 \
+    --platform "$TARGET_PLATFORMS" \
     --build-arg GOPROXY="$GOPROXY" \
     --tag "$IMAGE" \
     --push \
     .
 elif command -v podman >/dev/null; then
-  podman build \
-    --platform linux/amd64 \
-    --build-arg GOPROXY="$GOPROXY" \
-    --tag "$IMAGE" \
-    .
-  podman push "$IMAGE" "docker://${IMAGE}"
+  MANIFEST="localhost/diary_blog:release-${RELEASE_TAG}"
+  podman manifest rm "$MANIFEST" 2>/dev/null || true
+  podman manifest create "$MANIFEST"
+  IFS=',' read -r -a platforms <<< "$TARGET_PLATFORMS"
+  for platform in "${platforms[@]}"; do
+    podman build \
+      --platform "$platform" \
+      --build-arg GOPROXY="$GOPROXY" \
+      --manifest "$MANIFEST" \
+      .
+  done
+  podman manifest push --all "$MANIFEST" "docker://${IMAGE}"
 else
   die "需要 Docker Buildx 或 Podman"
 fi

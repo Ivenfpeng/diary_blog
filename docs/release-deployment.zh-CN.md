@@ -237,7 +237,7 @@ printf '%s\n' '换成强密码' | \
 Compose 服务器。脚本不会自动 commit、push Git，也不会删除本地文件；它会：
 
 1. 检查工作区和运行 `make test`、`make vet`；
-2. 使用 Docker Buildx 或 Podman 构建 `linux/amd64` 镜像并推送 GHCR；
+2. 使用 Docker Buildx 或 Podman 同时构建 `linux/amd64`、`linux/arm64` 镜像并推送 GHCR；
 3. 通过 SSH 备份远端 `.env` 和站点数据；
 4. 把远端 `BLOG_IMAGE` 切换到本次不可变 tag；
 5. 执行 `docker compose pull/up`；
@@ -279,6 +279,18 @@ REMOTE_COMPOSE_FILES='-f compose.deploy.yaml -f compose.https-auto.yaml' \
 IMAGE_REPOSITORY=ghcr.io/ivenfpeng/diary_blog \
 GOPROXY=https://goproxy.cn,direct \
 ./scripts/release-remote.sh
+```
+
+脚本默认发布多架构 manifest，也可以显式指定平台：
+
+```sh
+TARGET_PLATFORMS=linux/amd64,linux/arm64 ./scripts/release-remote.sh
+```
+
+如果只需要临时发布单架构镜像：
+
+```sh
+TARGET_PLATFORMS=linux/amd64 ./scripts/release-remote.sh
 ```
 
 脚本默认拒绝未提交工作区，避免误发布半成品。如果明确要发布当前未提交
