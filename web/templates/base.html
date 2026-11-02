@@ -35,8 +35,11 @@
         <nav>
           <a href="/">All writing</a>
           <a href="/archive">By year</a>
-          {{range .Categories}}<a href="/categories/{{.Slug}}">{{.Name}}</a>{{end}}
-          {{range .Tags}}<a href="/tags/{{.Slug}}">{{.Name}}</a>{{end}}
+          {{- $currentCategory := .CurrentCategory -}}
+          {{- if .Categories}}<span class="taxonomy-label">Categories</span>{{end}}
+          {{range .Categories}}<a class="taxonomy-link{{if eq $currentCategory .Slug}} is-current{{end}}" href="/categories/{{.Slug}}"><span>{{.Name}}</span><span aria-hidden="true">↗</span></a>{{end}}
+          {{- if .Tags}}<span class="taxonomy-label">Tags</span>{{end}}
+          {{range .Tags}}<a class="taxonomy-link{{if eq $.CurrentTag .Slug}} is-current{{end}}" href="/tags/{{.Slug}}"><span>#{{.Name}}</span><span aria-hidden="true">↗</span></a>{{end}}
         </nav>
         {{if .CurrentCategory}}<p class="taxonomy-current">Category: {{.CurrentCategory}}</p>{{end}}
         {{if .CurrentTag}}<p class="taxonomy-current">Tag: {{.CurrentTag}}</p>{{end}}

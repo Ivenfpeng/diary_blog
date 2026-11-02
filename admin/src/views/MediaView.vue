@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { Copy, Search } from '@lucide/vue'
 import { apiRequest } from '../api/client'
 import { notifyError, notifySuccess } from '../state/notifications'
 
@@ -21,6 +22,12 @@ const errorMessage = ref('')
 const statusMessage = ref('')
 const uploading = ref(false)
 const savingAltID = ref<number | null>(null)
+const query = ref('')
+const filteredMedia = computed(() => {
+  const term = query.value.trim().toLowerCase()
+  if (!term) return media.value
+  return media.value.filter((item) => `${item.alt_text} ${item.path} ${item.mime_type}`.toLowerCase().includes(term))
+})
 
 async function load(): Promise<void> {
   try {
@@ -98,12 +105,22 @@ async function saveAltText(item: Media): Promise<void> {
   }
 }
 
+async function copyURL(item: Media): Promise<void> {
+  const url = new URL(`/media/${item.path}`, window.location.origin).toString()
+  try {
+    await navigator.clipboard.writeText(url)
+    notifySuccess('URL copied', 'The public media URL is ready to paste.')
+  } catch (error) {
+    notifyError('Copy failed', error instanceof Error ? error.message : 'Clipboard access is unavailable.')
+  }
+}
+
 onMounted(load)
 </script>
 
 <template>
   <section class="media-view" aria-labelledby="media-heading">
-    <div class="view-heading"><div><p class="eyebrow">Library</p><h1 id="media-heading">Media</h1></div></div>
+    <div class="view-heading"><div><p class="eyebrow">Library / Assets</p><h1 id="media-heading">Media</h1><p class="view-lede">Upload, review and reuse the images that give your articles a visual rhythm.</p></div><span class="media-count">{{ media.length }} assets</span></div>
     <form class="upload-form" @submit.prevent="upload">
       <label>Image <input id="media-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" @change="selectFile" /></label>
       <label>Alt text <input id="alt-text" v-model="altText" required placeholder="Describe the image" /></label>
@@ -111,14 +128,15 @@ onMounted(load)
     </form>
     <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
     <p v-if="statusMessage" class="muted">{{ statusMessage }}</p>
+    <div class="media-toolbar"><label class="media-search"><Search :size="16" aria-hidden="true" /><span class="sr-only">Search media</span><input v-model="query" type="search" placeholder="Search alt text, filename or type" /></label><span class="muted">Showing {{ filteredMedia.length }} of {{ media.length }}</span></div>
     <div class="media-list">
-      <article v-for="item in media" :key="item.id" class="media-row">
+      <article v-for="item in filteredMedia" :key="item.id" class="media-row">
         <img :src="`/media/${item.path}`" :alt="item.alt_text" />
         <div><strong>{{ item.alt_text || 'Untitled image' }}</strong><small>{{ item.mime_type }} · {{ item.width }}×{{ item.height }}</small></div>
         <label class="alt-editor">Alt text <input :id="`media-alt-${item.id}`" v-model="altDrafts[item.id]" /></label>
-        <button type="button" class="secondary-button" :data-testid="`save-alt-${item.id}`" :disabled="savingAltID === item.id" @click="saveAltText(item)">Save alt text</button>
+        <div class="media-actions"><button type="button" class="secondary-button" :data-testid="`save-alt-${item.id}`" :disabled="savingAltID === item.id" @click="saveAltText(item)">Save alt text</button><button type="button" class="icon-action" :aria-label="`Copy URL for ${item.alt_text}`" @click="copyURL(item)"><Copy :size="15" aria-hidden="true" /> Copy URL</button></div>
       </article>
-      <p v-if="!media.length" class="muted">No media uploaded yet.</p>
+      <p v-if="!filteredMedia.length" class="muted">{{ media.length ? 'No media matches this search.' : 'No media uploaded yet.' }}</p>
     </div>
   </section>
 </template>
@@ -126,15 +144,25 @@ onMounted(load)
 <style scoped>
 .media-view { width: 100%; display: grid; gap: 18px; }
 h1 { margin: 0; font-size: clamp(30px, 3vw, 44px); letter-spacing: -.045em; }
+.view-lede { max-width: 560px; margin: 8px 0 0; color: #667085; font-size: 14px; }
+.media-count { align-self: center; padding: 8px 11px; border: 1px solid #dbe3ed; border-radius: 999px; color: #667085; background: #fff; font-size: 12px; font-weight: 700; }
 .view-heading { margin-bottom: 0; }
 .upload-form { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; padding: 18px; border: 1px solid rgb(202 215 205 / 80%); border-radius: 22px; background: var(--admin-panel); box-shadow: var(--admin-shadow); backdrop-filter: blur(18px); }
 label { display: grid; gap: 6px; color: #39463e; font-size: 13px; font-weight: 650; }
 input { min-height: 44px; border: 1px solid #b9c5be; border-radius: 12px; padding: 0 12px; font: inherit; background: #fff; }
 .media-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
-.media-row { display: grid; grid-template-columns: 92px 1fr; gap: 12px; align-items: center; min-width: 0; padding: 16px; border: 1px solid rgb(202 215 205 / 80%); border-radius: 22px; background: var(--admin-panel-strong); box-shadow: var(--admin-shadow); }
+.media-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.media-search { display: flex; flex: 1; align-items: center; gap: 8px; max-width: 520px; padding: 0 12px; border: 1px solid #d0d5dd; border-radius: 10px; color: #98a2b3; background: #fff; }
+.media-search input { min-height: 40px; border: 0; padding-left: 0; outline: 0; }
+.media-row { display: grid; grid-template-columns: 92px 1fr; gap: 12px; align-items: center; min-width: 0; padding: 16px; border: 1px solid #e2e8f0; border-radius: 16px; background: var(--admin-panel-strong); box-shadow: 0 12px 28px rgb(15 35 68 / 6%); }
 .media-row img { width: 92px; height: 68px; object-fit: cover; border-radius: 14px; background: #edf0ee; }
 .media-row small { display: block; color: #68756d; margin-top: 4px; }
-.alt-editor, .secondary-button { grid-column: 1 / -1; }
+.alt-editor, .media-actions { grid-column: 1 / -1; }
 .secondary-button { min-height: 38px; justify-self: start; border: 1px solid #9eaea5; border-radius: 12px; padding: 0 12px; background: #fff; color: #193d2f; font: inherit; font-weight: 650; cursor: pointer; }
+.media-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.icon-action { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; border: 0; color: #1677ff; background: transparent; font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }
+.icon-action:hover { color: #0958d9; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .muted { color: #68756d; }
+@media (max-width: 600px) { .media-toolbar { align-items: stretch; flex-direction: column; }.media-search { max-width: none; }.media-count { align-self: start; } }
 </style>

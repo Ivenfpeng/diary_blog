@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { FilePlus, Search } from '@lucide/vue'
+import { FilePlus, RotateCcw, Search } from '@lucide/vue'
 import { useRouter } from 'vue-router'
 import { apiRequest } from '../api/client'
 import type { EditablePost } from '../state/editor'
@@ -57,6 +57,12 @@ function search(): void {
   void loadPosts()
 }
 
+function clearFilters(): void {
+  status.value = ''
+  query.value = ''
+  search()
+}
+
 function goToPage(next: number): void {
   page.value = Math.min(Math.max(1, next), pageCount.value)
   void loadPosts()
@@ -75,6 +81,7 @@ onMounted(loadPosts)
       <label>Status <select v-model="status" @change="search"><option value="">All statuses</option><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select></label>
       <label class="search-field">Search <input v-model="query" type="search" placeholder="Title or content" /></label>
       <button type="submit" class="secondary-button"><Search :size="16" aria-hidden="true" /> Search</button>
+      <button type="button" class="text-button" @click="clearFilters"><RotateCcw :size="15" aria-hidden="true" /> Clear</button>
     </form>
     <p v-if="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
     <p v-else-if="loading" class="muted">Loading articles…</p>
@@ -104,6 +111,8 @@ h1 { margin: 0; font-size: clamp(30px, 3vw, 44px); letter-spacing: -.045em; }
 .create-button, .secondary-button { min-height: 42px; display: inline-flex; align-items: center; gap: 7px; padding: 0 14px; border-radius: 13px; font: inherit; font-weight: 750; cursor: pointer; }
 .create-button { margin: 0; }
 .secondary-button { border: 1px solid #a8b8ae; background: rgb(255 255 252 / 82%); color: #193d2f; }
+.text-button { display: inline-flex; align-items: center; gap: 5px; min-height: 40px; border: 0; color: #667085; background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; }
+.text-button:hover { color: #1677ff; }
 .post-filters { padding: 18px; border: 1px solid rgb(202 215 205 / 80%); border-radius: 22px; background: var(--admin-panel); box-shadow: var(--admin-shadow); backdrop-filter: blur(18px); }
 label { display: grid; gap: 5px; color: #39463e; font-size: 13px; font-weight: 650; }
 input, select { min-height: 44px; border: 1px solid #b9c5be; border-radius: 12px; padding: 0 12px; font: inherit; background: #fff; }

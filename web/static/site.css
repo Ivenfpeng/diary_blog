@@ -48,6 +48,11 @@ a:focus-visible, button:focus-visible { outline: none; box-shadow: var(--focus-r
 .taxonomy a { padding: 6px 8px; border-radius: 8px; color: inherit; text-decoration: none; }
 .taxonomy a:hover { background: var(--forest-100); }
 .taxonomy a:hover { color: var(--forest-800); text-decoration: underline; }
+.taxonomy-label { margin: .8rem .5rem .15rem; color: #98a2b3; font-size: .62rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.taxonomy-link { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.taxonomy-link span:last-child { color: #b7c9df; font-size: .72rem; opacity: 0; transform: translateX(-3px); transition: opacity .15s ease, transform .15s ease; }
+.taxonomy-link:hover span:last-child, .taxonomy-link.is-current span:last-child { opacity: 1; transform: translateX(0); }
+.taxonomy-link.is-current { color: var(--forest-800); background: #eff6ff; font-weight: 800; }
 .taxonomy-current { color: var(--forest-800); margin: var(--space-3) 0; }
 main { min-width: 0; }
 .eyebrow { margin: 0 0 var(--space-1); color: var(--gold-600); font-family: ui-monospace, "SFMono-Regular", monospace; font-size: .72rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
