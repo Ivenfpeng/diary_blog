@@ -167,9 +167,11 @@
 | 2026-11-02 23:05 CST | 管理端操作通知增加 3 秒自动关闭，同时保留手动关闭按钮；新增 fake timer 回归测试，管理端测试提升至 38 项。 |
 | 2026-11-02 23:20 CST | 新增 `scripts/release-remote.sh` 一键发布脚本：本地检查、Docker Buildx/Podman amd64 镜像推送、远端备份、Compose 升级和线上健康检查串联完成；README 与发布手册同步补充参数和回滚说明。 |
 | 2026-11-02 23:30 CST | 一键发布脚本升级为默认多架构发布：Docker Buildx 一次推送 `linux/amd64,linux/arm64`，Podman 通过 manifest list 推送两个架构；增加 `TARGET_PLATFORMS` 覆盖参数。 |
+| 2026-11-03 00:20 CST | 核实生产服务器 `167.179.105.202` 为 `x86_64/amd64`；一键发布脚本默认改为仅构建 `linux/amd64`，避免无必要的 ARM 模拟构建。需要 ARM 部署时可通过 `TARGET_PLATFORMS=linux/arm64` 覆盖。 |
 | 2026-11-02 23:40 CST | 根据本地无 Docker 的发布反馈，补充 `podman login` 用法；脚本自动忽略生成的 `bin/blog` 与 `.metrics/`，只对真实源码未提交修改要求 `ALLOW_DIRTY=1`。 |
 | 2026-11-02 23:50 CST | 媒体上传限制统一调整为 50 MiB：后端原始文件/解码内存、三套 Caddy 配置和管理端提示同步更新；新增压缩文件较小但解码尺寸较大的回归测试，确认不再误报 10 MiB。 |
 | 2026-11-02 23:55 CST | 优化一键发布脚本的 shell 行为：禁止 `source` 加载，SSH 强制非交互模式并关闭终端输入，发布完成后直接返回调用终端。 |
+| 2026-11-03 00:05 CST | 定位跨架构 Podman 构建卡在 Dockerfile Go 测试步骤：发布脚本已先执行宿主机 `make test`，镜像构建通过 `RUN_GO_TESTS=false` 跳过每个 QEMU 架构内的重复测试；Dockerfile 默认仍保留测试。 |
 
 ## 下一跟进点
 

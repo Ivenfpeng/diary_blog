@@ -29,7 +29,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
   REMOTE_DIR              远端部署目录，默认 /root/diary_blog
   REMOTE_COMPOSE_FILES    Compose 参数，默认 '-f compose.deploy.yaml'
   REMOTE_HEALTH_URL       发布后检查地址，默认 https://ivenpeng.top
-  TARGET_PLATFORMS        构建平台，默认 linux/amd64,linux/arm64
+  TARGET_PLATFORMS        构建平台，默认 linux/amd64（当前生产服务器为 x86_64）
   RELEASE_TAG             镜像标签，默认 deploy-时间-commit
   ALLOW_DIRTY=1           允许发布未提交工作区
   SKIP_CHECKS=1           跳过本地 make test/make vet
@@ -44,7 +44,9 @@ REMOTE_DIR=${REMOTE_DIR:-/root/diary_blog}
 REMOTE_COMPOSE_FILES=${REMOTE_COMPOSE_FILES:--f compose.deploy.yaml}
 REMOTE_HEALTH_URL=${REMOTE_HEALTH_URL:-https://ivenpeng.top}
 IMAGE_REPOSITORY=${IMAGE_REPOSITORY:-ghcr.io/ivenfpeng/diary_blog}
-TARGET_PLATFORMS=${TARGET_PLATFORMS:-linux/amd64,linux/arm64}
+# 167.179.105.202 reports x86_64, so the production release only needs amd64.
+# Override this when deploying to another architecture, for example arm64.
+TARGET_PLATFORMS=${TARGET_PLATFORMS:-linux/amd64}
 GOPROXY=${GOPROXY:-https://goproxy.cn,direct}
 BACKUP_BEFORE_DEPLOY=${BACKUP_BEFORE_DEPLOY:-1}
 SKIP_CHECKS=${SKIP_CHECKS:-0}
@@ -85,6 +87,7 @@ if command -v docker >/dev/null && docker buildx version >/dev/null 2>&1; then
   docker buildx build \
     --platform "$TARGET_PLATFORMS" \
     --build-arg GOPROXY="$GOPROXY" \
+    --build-arg RUN_GO_TESTS=false \
     --tag "$IMAGE" \
     --push \
     .
@@ -97,6 +100,7 @@ elif command -v podman >/dev/null; then
     podman build \
       --platform "$platform" \
       --build-arg GOPROXY="$GOPROXY" \
+      --build-arg RUN_GO_TESTS=false \
       --manifest "$MANIFEST" \
       .
   done

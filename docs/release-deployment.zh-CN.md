@@ -9,7 +9,7 @@ Docker Compose；本地没有 Docker 时可以将命令中的 `docker`/`docker c
 
 ```text
 修改代码 → 本地测试与构建 → 推送开发分支 → 创建并合并 PR 到 main
-→ GitHub Actions 构建 amd64/arm64 镜像并推送 GHCR
+→ GitHub Actions 构建 amd64/arm64 镜像并推送 GHCR（通用镜像）
 → 服务器拉取固定镜像 → Compose 重启 → 健康检查
 ```
 
@@ -237,7 +237,7 @@ printf '%s\n' '换成强密码' | \
 Compose 服务器。脚本不会自动 commit、push Git，也不会删除本地文件；它会：
 
 1. 检查工作区和运行 `make test`、`make vet`；
-2. 使用 Docker Buildx 或 Podman 同时构建 `linux/amd64`、`linux/arm64` 镜像并推送 GHCR；
+2. 默认使用 Docker Buildx 或 Podman 构建当前生产服务器所需的 `linux/amd64` 镜像并推送 GHCR；发布脚本会跳过镜像内重复的 Go 测试，避免构建阶段重复执行导致构建极慢；
 3. 通过 SSH 备份远端 `.env` 和站点数据；
 4. 把远端 `BLOG_IMAGE` 切换到本次不可变 tag；
 5. 执行 `docker compose pull/up`；
@@ -285,16 +285,25 @@ GOPROXY=https://goproxy.cn,direct \
 ./scripts/release-remote.sh
 ```
 
-脚本默认发布多架构 manifest，也可以显式指定平台：
+当前生产服务器是 `x86_64`，因此脚本默认只发布 `linux/amd64`，不再额外构建 ARM 镜像：
 
 ```sh
-TARGET_PLATFORMS=linux/amd64,linux/arm64 ./scripts/release-remote.sh
+./scripts/release-remote.sh
 ```
 
-如果只需要临时发布单架构镜像：
+如果部署到 ARM64 服务器，才需要覆盖平台参数：
 
 ```sh
-TARGET_PLATFORMS=linux/amd64 ./scripts/release-remote.sh
+TARGET_PLATFORMS=linux/arm64 ./scripts/release-remote.sh
+```
+
+直接手动构建镜像时，如果已经在宿主机运行过 `make test`，也可以加上：
+
+```sh
+podman build --platform linux/amd64 \
+  --build-arg GOPROXY=https://goproxy.cn,direct \
+  --build-arg RUN_GO_TESTS=false \
+  -t ghcr.io/ivenfpeng/diary_blog:manual .
 ```
 
 脚本默认拒绝未提交源码修改，避免误发布半成品；本地生成的 `bin/blog` 和

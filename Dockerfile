@@ -14,6 +14,7 @@ WORKDIR /src
 
 ARG GOPROXY=https://proxy.golang.org,direct
 ARG GOSUMDB=sum.golang.org
+ARG RUN_GO_TESTS=true
 
 COPY go.mod go.sum ./
 RUN GOPROXY="${GOPROXY}" GOSUMDB="${GOSUMDB}" go mod download
@@ -21,7 +22,7 @@ RUN GOPROXY="${GOPROXY}" GOSUMDB="${GOSUMDB}" go mod download
 COPY . ./
 COPY --from=admin-build /src/admin/dist ./web/admin
 
-RUN GOCACHE=/tmp/go-build-cache go test ./... \
+RUN if [ "$RUN_GO_TESTS" = "true" ]; then GOCACHE=/tmp/go-build-cache go test ./...; fi \
     && CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/blog ./cmd/blog
 
 FROM alpine:3.22
