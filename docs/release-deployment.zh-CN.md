@@ -258,6 +258,9 @@ ssh-copy-id root@167.179.105.202  # 或提前配置好 SSH 公钥登录
 ./scripts/release-remote.sh
 ```
 
+必须直接执行脚本，不要使用 `source ./scripts/release-remote.sh`；脚本使用
+非交互 SSH，完成后会直接回到当前终端提示符，不会停留在远端 shell。
+
 默认值适配当前服务器：
 
 ```text

@@ -4,6 +4,14 @@ set -Eeuo pipefail
 # Build the current worktree, push an immutable image tag, then upgrade a
 # remote Compose deployment over SSH. The script never commits or deletes files.
 
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  echo "请直接执行 ./scripts/release-remote.sh，不要使用 source 加载脚本。" >&2
+  return 0 2>/dev/null
+fi
+
+export GIT_TERMINAL_PROMPT=0
+exec </dev/null
+
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT_DIR"
 
@@ -98,10 +106,10 @@ else
 fi
 
 log "检查远端 Compose 配置"
-ssh "$REMOTE" "set -eu; test -d '$REMOTE_DIR'; test -f '$REMOTE_DIR/.env'; command -v docker >/dev/null; docker compose version >/dev/null"
+ssh -T -o BatchMode=yes "$REMOTE" "set -eu; test -d '$REMOTE_DIR'; test -f '$REMOTE_DIR/.env'; command -v docker >/dev/null; docker compose version >/dev/null"
 
 log "更新远端镜像并重启"
-ssh "$REMOTE" "set -eu
+ssh -T -o BatchMode=yes "$REMOTE" "set -eu
 cd '$REMOTE_DIR'
 cp .env .env.backup-release-\$(date +%Y%m%d%H%M%S)
 if [ '$BACKUP_BEFORE_DEPLOY' = 1 ]; then
@@ -117,7 +125,7 @@ docker compose $REMOTE_COMPOSE_FILES up -d blog caddy
 docker compose $REMOTE_COMPOSE_FILES ps"
 
 log "验证远端服务"
-ssh "$REMOTE" "set -eu
+ssh -T -o BatchMode=yes "$REMOTE" "set -eu
 cd '$REMOTE_DIR'
 docker compose $REMOTE_COMPOSE_FILES ps --status running | grep -q 'blog'
 docker inspect --format '{{.State.Health.Status}}' diary_blog-blog-1 | grep -q healthy"

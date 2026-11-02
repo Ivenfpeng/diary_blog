@@ -169,6 +169,7 @@
 | 2026-11-02 23:30 CST | 一键发布脚本升级为默认多架构发布：Docker Buildx 一次推送 `linux/amd64,linux/arm64`，Podman 通过 manifest list 推送两个架构；增加 `TARGET_PLATFORMS` 覆盖参数。 |
 | 2026-11-02 23:40 CST | 根据本地无 Docker 的发布反馈，补充 `podman login` 用法；脚本自动忽略生成的 `bin/blog` 与 `.metrics/`，只对真实源码未提交修改要求 `ALLOW_DIRTY=1`。 |
 | 2026-11-02 23:50 CST | 媒体上传限制统一调整为 50 MiB：后端原始文件/解码内存、三套 Caddy 配置和管理端提示同步更新；新增压缩文件较小但解码尺寸较大的回归测试，确认不再误报 10 MiB。 |
+| 2026-11-02 23:55 CST | 优化一键发布脚本的 shell 行为：禁止 `source` 加载，SSH 强制非交互模式并关闭终端输入，发布完成后直接返回调用终端。 |
 
 ## 下一跟进点
 
