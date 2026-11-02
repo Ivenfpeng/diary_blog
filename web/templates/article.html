@@ -5,6 +5,7 @@
     <h1>{{.Post.Title}}</h1>
     {{if .Post.Summary}}<p class="article-summary">{{.Post.Summary}}</p>{{end}}
     <div class="article-meta"><time datetime="{{formatTime .Post.PublishedAt}}">{{formatDate .Post.PublishedAt}}</time><span aria-hidden="true">·</span><span>{{.ReadingMinutes}} min read</span>{{with .Post.Category}}<span aria-hidden="true">·</span><a href="/categories/{{.Slug}}">{{.Name}}</a>{{end}}{{range .Post.Tags}}<span aria-hidden="true">·</span><a href="/tags/{{.Slug}}">{{.Name}}</a>{{end}}</div>
+    {{if .Post.CoverMediaPath}}<img class="article-cover" src="/media/{{.Post.CoverMediaPath}}" alt="" fetchpriority="high">{{end}}
   </header>
   <div class="article-reading-grid">
     <div class="prose">{{.Body}}</div>
