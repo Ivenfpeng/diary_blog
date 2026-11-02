@@ -20,7 +20,9 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-const publicPageSize = 20
+// Keep public listings compact so the home page remains easy to scan. The
+// archive, category, tag, and search views use the same page size.
+const publicPageSize = 6
 
 type publicSettingsRepository interface {
 	GetSettings(context.Context) (sqlite.Settings, error)

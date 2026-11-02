@@ -231,6 +231,10 @@ printf '%s\n' '换成强密码' | \
 文章永久删除只适用于已归档文章；仍被文章引用的媒体会被拒绝删除，避免
 公开页面出现图片 404。生产操作前先备份，并保留最近一次可用镜像和配置。
 
+上传图片位于 Compose 命名卷 `blog_data` 内的 `/data/site/media/YYYY/MM/`，不是
+宿主机项目目录。公开 URL 使用 `/media/YYYY/MM/文件名`；文章列表、归档、分类、标签和
+搜索结果每页显示 6 篇，使用页面底部的 Previous/Next 翻页，RSS 与 sitemap 不分页。
+
 ## 十、一键发布脚本
 
 仓库提供 `scripts/release-remote.sh`，用于把当前工作区直接发布到远端

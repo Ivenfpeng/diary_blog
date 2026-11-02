@@ -465,13 +465,17 @@ func TestEmptySearchRendersInstructionsWithoutFTS(t *testing.T) {
 	}
 }
 
-func TestPublicListingsAndSearchPaginateBeyondTwentyArticles(t *testing.T) {
+func TestPublicListingsAndSearchPaginateBeyondSixArticles(t *testing.T) {
 	repo, _, db, closeDB := publicFixture(t)
 	t.Cleanup(closeDB)
 	publishPaginationPosts(t, repo, db, 21)
 	cache := site.NewCache(time.Hour)
 	server := httptest.NewServer(web.NewServer(repo, web.ServerOptions{Cache: cache}))
 	t.Cleanup(server.Close)
+	firstPage := getHTML(t, server.URL+"/")
+	if got := strings.Count(firstPage, `<article class="feed-card`); got != 6 {
+		t.Fatalf("home page cards = %d, want 6", got)
+	}
 
 	checks := []struct {
 		path         string
@@ -487,15 +491,15 @@ func TestPublicListingsAndSearchPaginateBeyondTwentyArticles(t *testing.T) {
 	for _, check := range checks {
 		t.Run(check.path, func(t *testing.T) {
 			body := getHTML(t, server.URL+check.path)
-			for _, want := range []string{"Pagination article 00", `rel="prev"`, check.previousHref, `<link rel="canonical" href="` + check.canonical + `">`} {
+			for _, want := range []string{"Pagination article 14", `rel="prev"`, check.previousHref, `<link rel="canonical" href="` + check.canonical + `">`} {
 				if !strings.Contains(body, want) {
 					t.Fatalf("GET %s missing %q\n%s", check.path, want, body)
 				}
 			}
 		})
 	}
-	if cache.EntryCount() != 4 {
-		t.Fatalf("listing cache entries = %d, want one page-aware entry per cached listing", cache.EntryCount())
+	if cache.EntryCount() != 5 {
+		t.Fatalf("listing cache entries = %d, want page 1 and page 2 entries for four listings", cache.EntryCount())
 	}
 }
 

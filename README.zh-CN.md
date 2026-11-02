@@ -458,9 +458,12 @@ docker compose -f compose.deploy.yaml exec -T blog \
 ## 数据与端口
 
 - 应用数据在 `blog_data` volume 的 `/data/site`。
+- 上传图片实际保存在 `blog_data` volume 的 `/data/site/media/YYYY/MM/`，数据库中的媒体记录只保存相对路径和元数据；公开访问地址为 `/media/YYYY/MM/文件名`。
+- 本地源码运行时默认目录是 `./data/media/`；容器部署不要直接修改容器内文件，使用 `docker compose exec blog` 或备份/恢复命令操作。
 - 备份建议放在 `/data/backups`。
 - Caddy 数据在 `caddy_data`，自动 HTTPS 证书也由 Caddy 管理在这里。
 - 只有 Caddy 暴露宿主机端口；Go 应用只在 Compose 私有网络内提供 `8080`。
+- 公开文章列表、归档、分类、标签和搜索结果每页显示 6 篇，通过页面底部 Previous/Next 翻页；RSS 和 sitemap 仍会读取全部已发布文章。
 - 默认网络使用 `172.30.0.0/24`，Caddy 固定地址为 `172.30.0.10`，并被配置为可信代理。如果与宿主机已有 Docker 网络冲突，需要同时调整 Compose subnet 和 `BLOG_TRUSTED_PROXY_CIDRS`。
 
 ## HTTPS 排障清单
