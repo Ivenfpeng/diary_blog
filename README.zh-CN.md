@@ -4,6 +4,8 @@
 
 `diary_blog` 是一个单二进制技术博客系统：公开站点服务端渲染，管理后台使用 Vue SPA，内容存储在 SQLite 中，并内置搜索、媒体上传、文章发布快照、修订历史、备份恢复和 Compose 部署方案。
 
+完整的“代码修改 → 测试 → 镜像发布 → 服务器升级/回滚”步骤见：[发布与部署操作手册](docs/release-deployment.zh-CN.md)。
+
 ## 技术栈
 
 - 后端：Go 1.27、`net/http`/Chi 风格路由、`html/template`、嵌入式静态资源、结构化 `slog` 日志。
@@ -68,11 +70,11 @@ curl -fsSL \
 ```sh
 curl -fsSL \
   -o compose.https-files.yaml \
-  "https://raw.githubusercontent.com/Ivenfpeng/diary_blog/${GIT_REF}/compose.https-files.yaml"
+  "https://raw.githubusercontent.com/Ivenfpeng/diary_blog/codex/diary-blog-mvp/compose.https-files.yaml"
 
 curl -fsSL \
   -o deploy/Caddyfile.https-files \
-  "https://raw.githubusercontent.com/Ivenfpeng/diary_blog/${GIT_REF}/deploy/Caddyfile.https-files"
+  "https://raw.githubusercontent.com/Ivenfpeng/diary_blog/codex/diary-blog-mvp/deploy/Caddyfile.https-files"
 ```
 
 校验下载内容：

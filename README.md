@@ -6,6 +6,8 @@
 a Vue admin console, SQLite storage, search, media uploads, published snapshots,
 revision history, backup/restore, and Docker/Podman Compose deployment.
 
+For the complete code-to-production workflow, see the [Chinese release and deployment guide](docs/release-deployment.zh-CN.md).
+
 ## Tech stack
 
 - Backend: Go 1.27, `net/http`/Chi-style routing, `html/template`, embedded
