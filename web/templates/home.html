@@ -1,13 +1,44 @@
 {{define "page"}}
-<section class="listing-header listing-hero">
-  <div>
-    <p class="eyebrow">Knowledge base / Latest</p>
-    <h1>{{.Heading}}</h1>
-    <p>{{.Description}}</p>
+<section class="home-intro">
+  <div class="profile-monogram" aria-hidden="true">D</div>
+  <div class="home-intro-copy">
+    <p class="eyebrow">Personal knowledge stream</p>
+    <h1>{{if .SiteAuthor}}{{.SiteAuthor}}{{else}}{{.SiteTitle}}{{end}}</h1>
+    <p>记录技术、生活与正在形成的想法。慢一点写，认真一点读。</p>
+    <div class="home-intro-links"><a href="/archive">浏览全部文章</a><a href="/search">搜索内容</a></div>
   </div>
-  <div class="hero-orbit" aria-hidden="true"><span>01</span><span>read</span></div>
+  <div class="home-intro-note"><span>Now</span><strong>Keep making<br>small things.</strong></div>
 </section>
-{{template "post_rows" .}}
+<div class="home-content-grid">
+  <section class="home-feed" aria-labelledby="latest-heading">
+    <div class="feed-heading"><div><p class="eyebrow">Latest notes</p><h2 id="latest-heading">最近更新</h2></div><a href="/archive">全部 →</a></div>
+    {{range $index, $post := .Posts}}
+    <article class="feed-card{{if eq $index 0}} feed-card-featured{{end}}">
+      {{if $post.CoverMediaPath}}<a class="feed-card-cover" href="/posts/{{$post.Slug}}"><img src="/media/{{$post.CoverMediaPath}}" alt="" loading="lazy"></a>{{end}}
+      <div class="feed-card-body">
+        <div class="feed-card-meta"><time datetime="{{formatTime $post.PublishedAt}}">{{formatDate $post.PublishedAt}}</time>{{with $post.Category}}<a href="/categories/{{.Slug}}">{{.Name}}</a>{{end}}</div>
+        <h3><a href="/posts/{{$post.Slug}}">{{$post.Title}}</a></h3>
+        {{if $post.Summary}}<p>{{$post.Summary}}</p>{{end}}
+        <div class="feed-card-footer"><div class="feed-tags">{{range $post.Tags}}<a href="/tags/{{.Slug}}">#{{.Name}}</a>{{end}}</div><a class="feed-read" href="/posts/{{$post.Slug}}">阅读文章 <span aria-hidden="true">↗</span></a></div>
+      </div>
+    </article>
+    {{else}}<p class="empty-state">还没有公开文章，先写下第一篇吧。</p>{{end}}
+  </section>
+  <aside class="home-aside" aria-label="Explore">
+    <section class="aside-card">
+      <p class="eyebrow">Explore</p>
+      <h2>按主题阅读</h2>
+      <nav class="topic-cloud">{{range .Categories}}<a href="/categories/{{.Slug}}">{{.Name}}</a>{{end}}{{range .Tags}}<a href="/tags/{{.Slug}}">#{{.Name}}</a>{{end}}</nav>
+      <a class="aside-more" href="/archive">查看归档 →</a>
+    </section>
+    <section class="aside-card aside-card-muted">
+      <p class="eyebrow">Stay in the loop</p>
+      <h2>订阅更新</h2>
+      <p>通过 RSS 跟踪新的文章和长期记录。</p>
+      <a class="aside-more" href="/feed.xml">打开 RSS →</a>
+    </section>
+  </aside>
+</div>
 {{template "pagination" .}}
 {{end}}
 
