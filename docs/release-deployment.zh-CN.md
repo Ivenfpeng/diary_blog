@@ -230,3 +230,74 @@ printf '%s\n' '换成强密码' | \
 
 文章永久删除只适用于已归档文章；仍被文章引用的媒体会被拒绝删除，避免
 公开页面出现图片 404。生产操作前先备份，并保留最近一次可用镜像和配置。
+
+## 十、一键发布脚本
+
+仓库提供 `scripts/release-remote.sh`，用于把当前工作区直接发布到远端
+Compose 服务器。脚本不会自动 commit、push Git，也不会删除本地文件；它会：
+
+1. 检查工作区和运行 `make test`、`make vet`；
+2. 使用 Docker Buildx 或 Podman 构建 `linux/amd64` 镜像并推送 GHCR；
+3. 通过 SSH 备份远端 `.env` 和站点数据；
+4. 把远端 `BLOG_IMAGE` 切换到本次不可变 tag；
+5. 执行 `docker compose pull/up`；
+6. 检查容器健康、`/healthz`、首页和管理台。
+
+首次配置：
+
+```sh
+docker login ghcr.io -u Ivenfpeng
+ssh-copy-id root@167.179.105.202  # 或提前配置好 SSH 公钥登录
+./scripts/release-remote.sh --help
+```
+
+默认发布命令：
+
+```sh
+./scripts/release-remote.sh
+```
+
+默认值适配当前服务器：
+
+```text
+REMOTE_HOST=167.179.105.202
+REMOTE_DIR=/root/diary_blog
+REMOTE_COMPOSE_FILES=-f compose.deploy.yaml
+REMOTE_HEALTH_URL=https://ivenpeng.top
+```
+
+公网 HTTPS 使用 override 时：
+
+```sh
+REMOTE_COMPOSE_FILES='-f compose.deploy.yaml -f compose.https-auto.yaml' \
+./scripts/release-remote.sh
+```
+
+本机使用 Podman 构建：
+
+```sh
+IMAGE_REPOSITORY=ghcr.io/ivenfpeng/diary_blog \
+GOPROXY=https://goproxy.cn,direct \
+./scripts/release-remote.sh
+```
+
+脚本默认拒绝未提交工作区，避免误发布半成品。如果明确要发布当前未提交
+修改：
+
+```sh
+ALLOW_DIRTY=1 ./scripts/release-remote.sh
+```
+
+跳过本地检查或发布前备份（不建议生产使用）：
+
+```sh
+SKIP_CHECKS=1 BACKUP_BEFORE_DEPLOY=0 ./scripts/release-remote.sh
+```
+
+脚本每次使用类似 `deploy-20261102230500-abc1234` 的固定 tag。回滚时只需
+把远端 `.env` 的 `BLOG_IMAGE` 改回上一个 tag，再执行：
+
+```sh
+ssh root@167.179.105.202 \
+  "cd /root/diary_blog && sed -i 's#^BLOG_IMAGE=.*#BLOG_IMAGE=ghcr.io/ivenfpeng/diary_blog:deploy-previous#' .env && docker compose -f compose.deploy.yaml pull blog && docker compose -f compose.deploy.yaml up -d blog caddy"
+```

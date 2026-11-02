@@ -6,6 +6,16 @@
 
 完整的“代码修改 → 测试 → 镜像发布 → 服务器升级/回滚”步骤见：[发布与部署操作手册](docs/release-deployment.zh-CN.md)。
 
+如果已经配置好 GHCR 登录和 SSH，可以直接使用仓库内的一键发布脚本：
+
+```sh
+docker login ghcr.io -u Ivenfpeng
+./scripts/release-remote.sh
+```
+
+脚本会运行本地检查、构建并推送 `linux/amd64` 镜像、备份远端数据、更新远端
+`.env`、重启 Compose，并检查 `/healthz`、首页和管理台。详细参数见[发布与部署操作手册](docs/release-deployment.zh-CN.md)。
+
 ## 技术栈
 
 - 后端：Go 1.27、`net/http`/Chi 风格路由、`html/template`、嵌入式静态资源、结构化 `slog` 日志。
