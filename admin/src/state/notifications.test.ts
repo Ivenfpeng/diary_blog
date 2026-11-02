@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clearNotifications, dismissNotification, notifications, notifyError, notifySuccess } from './notifications'
 
 describe('notifications', () => {
+  afterEach(() => {
+    clearNotifications()
+    vi.useRealTimers()
+  })
+
   it('records success and failure messages until dismissed', () => {
     clearNotifications()
 
@@ -18,5 +23,20 @@ describe('notifications', () => {
     expect(notifications.value).toMatchObject([
       { id: failure.id, type: 'error', title: 'Save failed' },
     ])
+  })
+
+  it('automatically dismisses notifications after three seconds', () => {
+    vi.useFakeTimers()
+    clearNotifications()
+
+    const notification = notifySuccess('Settings saved')
+    expect(notifications.value).toHaveLength(1)
+
+    vi.advanceTimersByTime(2999)
+    expect(notifications.value).toHaveLength(1)
+
+    vi.advanceTimersByTime(1)
+    expect(notifications.value).toHaveLength(0)
+    expect(notification.id).toBeGreaterThan(0)
   })
 })

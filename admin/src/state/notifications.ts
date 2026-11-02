@@ -10,12 +10,15 @@ export interface OperationNotification {
 }
 
 let nextNotificationID = 1
+const notificationTimers = new Map<number, ReturnType<typeof setTimeout>>()
+const notificationDuration = 3000
 
 export const notifications = ref<OperationNotification[]>([])
 
 export function notify(type: NotificationType, title: string, message?: string): OperationNotification {
   const notification = { id: nextNotificationID++, type, title, message }
   notifications.value = [...notifications.value, notification].slice(-5)
+  notificationTimers.set(notification.id, setTimeout(() => dismissNotification(notification.id), notificationDuration))
   return notification
 }
 
@@ -32,9 +35,15 @@ export function notifyInfo(title: string, message?: string): OperationNotificati
 }
 
 export function dismissNotification(id: number): void {
+  const timer = notificationTimers.get(id)
+  if (timer) {
+    clearTimeout(timer)
+    notificationTimers.delete(id)
+  }
   notifications.value = notifications.value.filter((notification) => notification.id !== id)
 }
 
 export function clearNotifications(): void {
+  for (const id of notificationTimers.keys()) dismissNotification(id)
   notifications.value = []
 }
