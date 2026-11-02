@@ -12,9 +12,9 @@
 
 当前阶段：发布收尾
 
-总体状态：最终整分支复审已通过；Podman 本地 HTTP-only 容器部署、image-only 部署、编辑器保存回归、Markdown 空白区输入回归、富文本图片上传/粘贴编辑回归、标题自动中文 Slug、中文 Slug 校验、大小写 percent-encoding 公开访问和管理端操作通知/分页滚动回归验证通过；HTTPS 部署模式待目标环境实测
+总体状态：最终整分支复审已通过；Podman 本地 HTTP-only 容器部署、image-only 部署、编辑器保存回归、Markdown 空白区输入回归、富文本图片上传/粘贴编辑回归、标题自动中文 Slug、中文 Slug 校验、大小写 percent-encoding 公开访问、管理端操作通知/分页滚动和新管理工作台回归验证通过；HTTPS 部署模式待目标环境实测
 
-最后登记：2026-09-09 13:07 CST
+最后登记：2026-11-02 18:00 CST
 
 ## 状态定义
 
@@ -48,7 +48,7 @@
 | 7 | 搜索、RSS、Sitemap、SEO | 完成 | `41d236e`, `7646a27`, `39913c5` | 两轮独立审查后通过；配置源地址、Host 污染防护及转义路径测试通过 | - |
 | 8 | 管理员密码、会话与 CSRF | 完成 | `b355547`, `3079e2d`, `4aa0141`, `b8c0977`, `eb6d21b` | 四轮安全复审后通过；Go 全量、race、vet、登录限流与迁移专项测试通过 | 双阶段限流、单管理员、12 小时会话、Cookie/CSRF、密文存储完成 |
 | 9 | 管理文章 API | 完成 | `36d66ad`, `9b413e3` | 一轮独立审查修复后通过；Go 全量、race、vet 与管理 API 契约测试通过 | create/get/list/autosave/preview/publish/archive/revisions/restore 已受会话与 CSRF 保护 |
-| 10 | Vue 后台框架与登录 | 完成 | `2dc1bc6`, `ebc09c8`, `d3d5500`, 本次管理端 UX 优化 | 独立审查通过；本次补充全局操作通知栏、主工作区滚动容器、分页记录 flex/横向滚动适配；`npm --prefix admin test`、`npm run test:e2e`、`make build`、`git diff --check` 通过 | 已修正 `/admin` base 路由与匿名 restore 后登录跳转；后台 shell 支持成功/失败通知与固定视口内滚动 |
+| 10 | Vue 后台框架与登录 | 完成 | `2dc1bc6`, `ebc09c8`, `d3d5500`, 本次管理端 UX 优化 | 独立审查通过；本次补充全局操作通知栏、主工作区滚动容器、分页记录 flex/横向滚动适配和指标/快捷操作工作台；`npm --prefix admin test`、`npm run test:e2e`、`make build`、`git diff --check` 通过 | 已修正 `/admin` base 路由与匿名 restore 后登录跳转；后台 shell 支持成功/失败通知与固定视口内滚动 |
 | 11 | 文章列表与富文本编辑器 | 完成 | `3b18f87`, `7c8cb32`, `3b9df88`, `7fa87a4`, 本次富文本/图片上传修复 | 两轮独立审查修复后通过；本次补充富文本 DOM 到 Markdown 序列化、编辑器内图片上传/粘贴插入、data URL 图片拦截、标题自动中文 Slug、公开媒体路由回归、中文 URL 大小写 percent-encoding 回归、外层点击聚焦组件测试、中文文章 Slug 校验与 Playwright 空白区输入/图片粘贴 E2E；`npm --prefix admin test`、`npm run test:e2e`、`go test ./...`、`make build`、`git diff --check` 通过 | 已从 CodeMirror Markdown 纯文本编辑升级为内置富文本编辑器；后端仍以 Markdown 为 canonical 存储和发布源；文章 Slug 支持中文/Unicode 字母数字与单连字符 |
 | 12 | 分类、媒体与站点设置 | 完成 | `f857dca`, `2e37bc6`, `0f63e4b`, `d68ed8a`, `7710281`, `5ea64fb` | 四轮独立审查修复后通过；本次补充分类/标签中文 Slug 前后端校验回归；`go test ./...`、`go vet ./...`、`npm --prefix admin test`、`npm --prefix admin run build`、`git diff --check` 通过 | WebP 使用真实解码；AVIF 采用严格结构/属性/extent 校验而非像素级解码；taxonomy Slug 支持中文/Unicode 字母数字与单连字符 |
 | 13 | 日志、健康检查、缓存与停机 | 完成 | `aa78da2`, `b106691` | 一轮独立审查修复后通过；Task 13 targeted、`go test ./...`、`go vet ./...`、`git diff --check` 通过 | 已修正 panic 日志状态与 slug 变更后的旧文章缓存失效 |
@@ -83,6 +83,8 @@
 - 管理后台保存体验已修复：非法 slug 会在前端提示并暂停 autosave，不再持续向 `/api/admin/posts/{id}` 发送必然失败的 PUT；slug 表单 `pattern` 已兼容浏览器 `v` flag 并支持中文/Unicode 字母数字；文章编辑器改用已存在分类下拉与标签复选框，避免手填不存在 ID 导致保存 400；不存在的分类、标签或封面媒体引用会由后端返回 `post_validation` 400，不再泄露为 500。
 - 管理后台操作反馈已补强：文章保存/预览/发布/归档/恢复、文章列表创建、分类标签增删改、媒体上传/alt 保存、站点设置保存和加载失败都会进入右上角操作通知栏；通知卡片不拦截页面按钮点击，关闭按钮具备独立无障碍名称。
 - 管理后台记录列表与分页适配已补强：文章记录列表在固定高度内滚动，分页栏使用 flex + 横向滚动容器并显示总记录数，窄屏下不会挤压或裁切按钮。
+- 管理后台概览页已升级为工作台：展示文章、媒体、分类/标签指标，提供新建文章、上传媒体、整理 taxonomy、站点设置快捷操作，并显示最近文章列表。
+- 管理端视觉已统一为蓝色信息架构与白色卡片层级，保留深色侧栏作为导航锚点；公共浏览页同步升级 sticky 顶栏、搜索入口、卡片化文章列表、阅读图片约束和移动端自适应。
 - E2E 与发布门禁已完成，包含 Playwright 完整写作流、中文 taxonomy slug 浏览器校验、draft/archived 在首页/分类/归档/搜索/RSS/Sitemap 的公开排除验证、桌面/平板/移动响应式重叠/遮挡/裁切断言、可覆盖 `BLOG_E2E_PORT`/`BLOG_E2E_BASE_URL` 的本地测试端口、截图产物、非容器 release gate，以及 Compose fresh-volume restore-smoke 目标。
 - 最终整分支复审修复已完成，包含有界/LRU/代际公共缓存、发布期间编辑锁、公共站点设置/RSS/SEO 消费与缓存失效、分页浏览与搜索、Linux 非 root 可读的 restore-smoke staging volume，以及 fail-fast restore-smoke 检查。
 - 本地 404/图片不显示问题已定位并修复：编辑器不再把粘贴图片保存成 data URL；公开渲染链路保留 `/media/...` 托管图片并继续过滤 data URL；服务端 `/media/*` 路由已有回归测试覆盖；本地旧文章已通过管理 API 修复为已发布中文 slug 与真实媒体链接；公开文章页和图片文件均返回 200；大小写不同的 percent-encoded 中文 URL 已统一解码为同一个 slug。
@@ -155,6 +157,7 @@
 | 2026-09-09 10:54 CST | 复现用户仍看到 404 的真实路径差异：大写 percent-encoded 中文 URL 返回 200，小写 percent-encoded URL 返回 404；补充失败优先回归测试并修复公开路由 slug 解码，确保 `/posts/%E8...` 与 `/posts/%e8...` 指向同一篇文章。 |
 | 2026-09-09 11:03 CST | 强制重建并重启本地 Podman 服务后，用用户提供的原始小写 percent-encoded URL 验证通过：`/healthz=204`、`/readyz=204`、文章页返回 200、无 404 文案、包含 `第一条博客` 和真实 `/media/...png` 图片链接。 |
 | 2026-09-09 13:07 CST | 管理端 UX 优化：新增全局操作通知 store 与通知栏，接入文章、分类标签、媒体和设置等主要成功/失败操作；文章列表增加总记录数、分页 flex 自适应和横向滚动容器；管理端主内容改为固定视口内滚动并统一滚动条；通过 Vitest 红绿回归和完整 Playwright E2E 验证。 |
+| 2026-11-02 18:00 CST | 按阿里系控制台风格继续优化：管理端新增指标/快捷操作/最近文章工作台，统一蓝色信息架构、卡片层级和响应式排版；公开浏览页新增 sticky 顶栏、搜索入口、卡片化文章列表、阅读图片样式与移动端适配；`npm --prefix admin test` 13 files/37 tests、完整 Playwright 4 tests、`make build`、Go 全量与 vet 均通过。 |
 
 ## 下一跟进点
 

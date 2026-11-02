@@ -1,8 +1,11 @@
 {{define "page"}}
-<section class="listing-header">
-  <p class="eyebrow">Latest notes</p>
-  <h1>{{.Heading}}</h1>
-  <p>{{.Description}}</p>
+<section class="listing-header listing-hero">
+  <div>
+    <p class="eyebrow">Knowledge base / Latest</p>
+    <h1>{{.Heading}}</h1>
+    <p>{{.Description}}</p>
+  </div>
+  <div class="hero-orbit" aria-hidden="true"><span>01</span><span>read</span></div>
 </section>
 {{template "post_rows" .}}
 {{template "pagination" .}}
