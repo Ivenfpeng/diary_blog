@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
-    "test": "vitest run"
+    "test": "vitest run --watch=false --reporter=dot"
   },
   "dependencies": {
     "@lucide/vue": "1.40.0",

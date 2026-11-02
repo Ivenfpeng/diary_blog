@@ -32,7 +32,7 @@ test-go:
 	GOCACHE=$(GO_CACHE) go test ./...
 
 test-admin:
-	$(NODE_ENV) npm --prefix admin test
+	$(NODE_ENV) CI=1 npm --prefix admin test
 
 test-e2e:
 	$(NODE_ENV) npm run test:e2e
