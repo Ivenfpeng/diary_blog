@@ -158,6 +158,7 @@
 | 2026-09-09 11:03 CST | 强制重建并重启本地 Podman 服务后，用用户提供的原始小写 percent-encoded URL 验证通过：`/healthz=204`、`/readyz=204`、文章页返回 200、无 404 文案、包含 `第一条博客` 和真实 `/media/...png` 图片链接。 |
 | 2026-09-09 13:07 CST | 管理端 UX 优化：新增全局操作通知 store 与通知栏，接入文章、分类标签、媒体和设置等主要成功/失败操作；文章列表增加总记录数、分页 flex 自适应和横向滚动容器；管理端主内容改为固定视口内滚动并统一滚动条；通过 Vitest 红绿回归和完整 Playwright E2E 验证。 |
 | 2026-11-02 18:00 CST | 按阿里系控制台风格继续优化：管理端新增指标/快捷操作/最近文章工作台，统一蓝色信息架构、卡片层级和响应式排版；公开浏览页新增 sticky 顶栏、搜索入口、卡片化文章列表、阅读图片样式与移动端适配；`npm --prefix admin test` 13 files/37 tests、完整 Playwright 4 tests、`make build`、Go 全量与 vet 均通过。 |
+| 2026-11-02 21:20 CST | 参考 yayujs.com 的个人主页与内容流体验重构公开首页：新增个人介绍区、最近更新 feed、封面图卡片、分类/标签主题云和 RSS 入口；保留现有搜索、归档、分类、标签与文章详情能力。`npm --prefix admin test` 13 files/37 tests、Go 全量、`make build` 均通过；提交 `3edb5f2` 已部署到 `https://ivenpeng.top`。 |
 
 ## 下一跟进点
 
