@@ -255,11 +255,14 @@ function focusEditorFromPointer(event: MouseEvent): void {
   const target = event.target
   if (!(target instanceof HTMLElement)) return
   if (target.closest('.rich-editor-toolbar, button, input')) return
-  if (surface.value.contains(target) || target === event.currentTarget) {
-    event.preventDefault()
-    placeCaretAtEnd()
-    window.requestAnimationFrame(() => placeCaretAtEnd())
-  }
+  // Let the browser handle native selection inside the editable surface. The
+  // previous implementation moved the caret to the end on every mousedown,
+  // which made mouse drag-selection impossible and forced keyboard-only edits.
+  if (surface.value.contains(target)) return
+  if (target !== event.currentTarget) return
+  event.preventDefault()
+  placeCaretAtEnd()
+  window.requestAnimationFrame(() => placeCaretAtEnd())
 }
 
 function runCommand(command: string, value?: string): void {

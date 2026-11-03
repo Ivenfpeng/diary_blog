@@ -37,6 +37,27 @@ describe('MarkdownEditor', () => {
     wrapper.unmount()
   })
 
+  it('preserves a native mouse selection inside the editable surface', async () => {
+    const wrapper = mount(MarkdownEditor, { attachTo: document.body, props: { modelValue: 'Select this text' } })
+    const surface = wrapper.get('.rich-editor-surface').element as HTMLElement
+    const textNode = surface.querySelector('p')?.firstChild
+    if (!textNode) throw new Error('expected paragraph text node')
+    const range = document.createRange()
+    range.setStart(textNode, 0)
+    range.setEnd(textNode, 6)
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+
+    const event = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    surface.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(selection?.anchorOffset).toBe(0)
+    expect(selection?.focusOffset).toBe(6)
+    wrapper.unmount()
+  })
+
   it('uploads an image and inserts it as Markdown content', async () => {
     const uploadImage = vi.fn().mockResolvedValue({ src: '/media/2026/09/photo.png', alt: 'Photo' })
     const wrapper = mount(MarkdownEditor, {
