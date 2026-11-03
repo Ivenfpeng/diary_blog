@@ -234,6 +234,8 @@ printf '%s\n' '换成强密码' | \
 上传图片位于 Compose 命名卷 `blog_data` 内的 `/data/site/media/YYYY/MM/`，不是
 宿主机项目目录。公开 URL 使用 `/media/YYYY/MM/文件名`；文章列表、归档、分类、标签和
 搜索结果每页显示 6 篇，使用页面底部的 Previous/Next 翻页，RSS 与 sitemap 不分页。
+管理台 Media 页面会列出图片的正文/封面引用，并提供进入文章编辑页的链接。删除前必须移除全部引用；
+如果正文已删但仍不能删除，请检查文章编辑页的 Cover image 字段并清空后保存。
 
 ## 十、一键发布脚本
 

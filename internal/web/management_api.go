@@ -189,6 +189,10 @@ func (a *adminManagementAPI) deleteMedia(w http.ResponseWriter, r *http.Request)
 	}
 	path, err := a.repository.DeleteMedia(r.Context(), id)
 	if err != nil {
+		if errors.Is(err, sqlite.ErrReferenced) {
+			writeAPIError(w, r, http.StatusConflict, "media_referenced", "This image is still referenced by one or more articles. Remove the image from the article content or cover first.")
+			return
+		}
 		a.writeError(w, r, err)
 		return
 	}
@@ -322,7 +326,7 @@ func (a *adminManagementAPI) writeError(w http.ResponseWriter, r *http.Request, 
 	case errors.Is(err, sqlite.ErrNotFound):
 		writeAPIError(w, r, http.StatusNotFound, "management_not_found", "The management resource was not found.")
 	case errors.Is(err, sqlite.ErrReferenced):
-		writeAPIError(w, r, http.StatusConflict, "management_referenced", "This category is still used by an article.")
+		writeAPIError(w, r, http.StatusConflict, "management_referenced", "This category or tag is still used by an article.")
 	default:
 		writeAPIError(w, r, http.StatusInternalServerError, "internal_error", "The request could not be completed.")
 	}

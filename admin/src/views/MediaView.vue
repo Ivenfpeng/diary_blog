@@ -12,6 +12,14 @@ interface Media {
   height: number
   size: number
   alt_text: string
+  references: MediaReference[]
+}
+interface MediaReference {
+  post_id: number
+  title: string
+  slug: string
+  status: string
+  kind: 'cover' | 'content'
 }
 
 const media = ref<Media[]>([])
@@ -153,6 +161,13 @@ onMounted(load)
         <img :src="`/media/${item.path}`" :alt="item.alt_text" />
         <div><strong>{{ item.alt_text || 'Untitled image' }}</strong><small>{{ item.mime_type }} · {{ item.width }}×{{ item.height }}</small></div>
         <label class="alt-editor">Alt text <input :id="`media-alt-${item.id}`" v-model="altDrafts[item.id]" /></label>
+        <div class="media-references">
+          <span class="reference-label">Used in {{ item.references?.length ?? 0 }} article{{ (item.references?.length ?? 0) === 1 ? '' : 's' }}</span>
+          <span v-if="!item.references?.length" class="reference-empty">Not currently referenced</span>
+          <RouterLink v-for="reference in item.references" :key="`${item.id}-${reference.post_id}-${reference.kind}`" class="reference-link" :to="{ name: 'post-edit', params: { id: reference.post_id } }">
+            {{ reference.title || reference.slug }}<small>{{ reference.kind === 'cover' ? 'Cover image' : 'Article content' }} · {{ reference.status }}</small>
+          </RouterLink>
+        </div>
         <div class="media-actions"><button type="button" class="secondary-button" :data-testid="`save-alt-${item.id}`" :disabled="savingAltID === item.id" @click="saveAltText(item)">Save alt text</button><button type="button" class="icon-action" :aria-label="`Copy URL for ${item.alt_text}`" @click="copyURL(item)"><Copy :size="15" aria-hidden="true" /> Copy URL</button><button type="button" class="icon-action danger-action" :aria-label="`Delete ${item.alt_text}`" @click="deleteMedia(item)"><Trash2 :size="15" aria-hidden="true" /> Delete</button></div>
       </article>
       <p v-if="!filteredMedia.length" class="muted">{{ media.length ? 'No media matches this search.' : 'No media uploaded yet.' }}</p>
@@ -183,7 +198,13 @@ input { min-height: 42px; padding: 0 12px; }
 .media-row { display: grid; grid-template-columns: 92px 1fr; gap: 12px; align-items: center; min-width: 0; padding: 16px; border: 1px solid #e2e8f0; border-radius: 16px; background: var(--admin-panel-strong); box-shadow: 0 12px 28px rgb(15 35 68 / 6%); }
 .media-row img { width: 92px; height: 68px; object-fit: cover; border-radius: 14px; background: #edf0ee; }
 .media-row small { display: block; color: #68756d; margin-top: 4px; }
-.alt-editor, .media-actions { grid-column: 1 / -1; }
+.alt-editor, .media-references, .media-actions { grid-column: 1 / -1; }
+.media-references { display: grid; gap: 7px; padding: 10px 12px; border: 1px solid #e6f4ff; border-radius: 10px; background: #f8fbff; }
+.reference-label { color: #344054; font-size: 12px; font-weight: 750; }
+.reference-empty { color: #98a2b3; font-size: 12px; }
+.reference-link { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; color: #1677ff; font-size: 12px; font-weight: 650; text-decoration: none; }
+.reference-link:hover { color: #0958d9; text-decoration: underline; }
+.reference-link small { color: #98a2b3; flex: 0 0 auto; font-size: 10px; font-weight: 500; }
 .secondary-button { min-height: 38px; justify-self: start; border: 1px solid #9eaea5; border-radius: 12px; padding: 0 12px; background: #fff; color: #193d2f; font: inherit; font-weight: 650; cursor: pointer; }
 .media-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .icon-action { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; border: 0; color: #1677ff; background: transparent; font: inherit; font-size: 12px; font-weight: 750; cursor: pointer; }

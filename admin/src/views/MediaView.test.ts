@@ -14,7 +14,7 @@ describe('MediaView', () => {
 
   it('requires alt text before uploading and reports upload progress', async () => {
     vi.mocked(apiRequest).mockResolvedValueOnce({ media: [] }).mockResolvedValueOnce({ media: { id: 1, path: '2026/09/photo.png', alt_text: 'Photo' } })
-    const wrapper = mount(MediaView)
+    const wrapper = mount(MediaView, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
     await flushPromises()
     const file = new File(['image'], 'photo.png', { type: 'image/png' })
     Object.defineProperty(wrapper.get('#media-file').element, 'files', { value: [file] })
@@ -31,7 +31,7 @@ describe('MediaView', () => {
 
   it('keeps the selected file so a failed upload can be retried', async () => {
     vi.mocked(apiRequest).mockResolvedValueOnce({ media: [] }).mockRejectedValueOnce(new Error('Upload failed'))
-    const wrapper = mount(MediaView)
+    const wrapper = mount(MediaView, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
     await flushPromises()
     const file = new File(['image'], 'photo.png', { type: 'image/png' })
     Object.defineProperty(wrapper.get('#media-file').element, 'files', { value: [file] })
@@ -48,7 +48,7 @@ describe('MediaView', () => {
     vi.mocked(apiRequest)
       .mockResolvedValueOnce({ media: [{ id: 7, path: '2026/09/photo.png', mime_type: 'image/png', width: 1, height: 1, size: 1, alt_text: 'Old text' }] })
       .mockResolvedValueOnce({ media: { id: 7, path: '2026/09/photo.png', mime_type: 'image/png', width: 1, height: 1, size: 1, alt_text: 'New text' } })
-    const wrapper = mount(MediaView)
+    const wrapper = mount(MediaView, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
     await flushPromises()
     await wrapper.get('#media-alt-7').setValue('New text')
     await wrapper.get('[data-testid="save-alt-7"]').trigger('click')
@@ -56,5 +56,31 @@ describe('MediaView', () => {
     expect(apiRequest).toHaveBeenLastCalledWith('/api/admin/media/7', { method: 'PATCH', body: { alt_text: 'New text' } })
     expect(wrapper.text()).toContain('New text')
     expect(notifications.value.at(-1)).toMatchObject({ type: 'success', title: 'Alt text saved' })
+  })
+
+  it('shows article references with links to the editor', async () => {
+    vi.mocked(apiRequest).mockResolvedValueOnce({
+      media: [{
+        id: 7,
+        path: '2026/09/photo.png',
+        mime_type: 'image/png',
+        width: 1,
+        height: 1,
+        size: 1,
+        alt_text: 'Photo',
+        references: [{ post_id: 42, title: 'A referenced article', slug: 'referenced', status: 'published', kind: 'content' }],
+      }],
+    })
+    const wrapper = mount(MediaView, {
+      global: {
+        stubs: { RouterLink: { props: ['to'], template: '<a :href="`/admin/posts/${to.params.id}`"><slot /></a>' } },
+      },
+    })
+    await flushPromises()
+
+    const link = wrapper.get('.reference-link')
+    expect(link.text()).toContain('A referenced article')
+    expect(link.attributes('href')).toBe('/admin/posts/42')
+    expect(link.text()).toContain('Article content')
   })
 })

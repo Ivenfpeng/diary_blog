@@ -118,11 +118,24 @@ func TestMediaDeletionRejectsReferencedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.ExecContext(ctx, "INSERT INTO posts (slug, title, content_md, status, cover_media_id, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)", "uses-media", "Uses media", "body", content.StatusDraft, media.ID, now.Format(time.RFC3339), now.Format(time.RFC3339)); err != nil {
+	if _, err := db.ExecContext(ctx, "INSERT INTO posts (slug, title, content_md, status, cover_media_id, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)", "uses-media", "Uses media", "![image](/media/2026/09/delete.png)", content.StatusDraft, media.ID, now.Format(time.RFC3339), now.Format(time.RFC3339)); err != nil {
 		t.Fatal(err)
+	}
+	references, err := repo.ListMediaReferences(ctx, media.ID)
+	if err != nil || len(references) != 1 || references[0].Kind != "cover" {
+		t.Fatalf("media references = %+v, err = %v", references, err)
 	}
 	if _, err := repo.DeleteMedia(ctx, media.ID); !errors.Is(err, sqliterepo.ErrReferenced) {
 		t.Fatalf("delete referenced media = %v, want ErrReferenced", err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE posts SET cover_media_id = NULL WHERE slug = ?", "uses-media"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.DeleteMedia(ctx, media.ID); !errors.Is(err, sqliterepo.ErrReferenced) {
+		t.Fatalf("delete content-referenced media = %v, want ErrReferenced", err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE posts SET content_md = ? WHERE slug = ?", "body", "uses-media"); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(ctx, "DELETE FROM posts WHERE slug = ?", "uses-media"); err != nil {
 		t.Fatal(err)
